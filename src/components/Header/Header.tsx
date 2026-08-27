@@ -1,4 +1,4 @@
-import { Droplets, Zap } from 'lucide-react';
+import { Droplets, Clock } from 'lucide-react';
 import type { ConnectionStatus } from '../../types/ecoRain';
 import { ConnectionStatusBadge } from '../ConnectionStatus/ConnectionStatusBadge';
 import { formatTimeSince } from '../../utils/formatters';
@@ -8,38 +8,42 @@ interface HeaderProps {
   ip: string;
   lastUpdated: Date | null;
   apiResponseMs: number | null;
-  isDemoMode: boolean;
   activePage: string;
   onNavigate: (page: string) => void;
 }
 
 const NAV_LINKS = [
   { id: 'dashboard',   label: 'Dashboard' },
-  { id: 'analytics',  label: 'Analytics' },
-  { id: 'diagnostics',label: 'Diagnostics' },
-  { id: 'settings',   label: 'Settings' },
+  { id: 'analytics',   label: 'Analytics' },
+  { id: 'diagnostics', label: 'Diagnostics' },
+  { id: 'settings',    label: 'Settings' },
 ];
 
 export function Header({
-  connectionStatus, ip, lastUpdated, apiResponseMs, isDemoMode, activePage, onNavigate
+  connectionStatus, ip, lastUpdated, apiResponseMs, activePage, onNavigate
 }: HeaderProps) {
   return (
-    <nav className="app-nav" role="navigation" aria-label="Main navigation">
-      <div className="nav-inner">
-        {/* Logo */}
-        <a className="nav-logo" href="#" onClick={e => { e.preventDefault(); onNavigate('dashboard'); }} aria-label="EcoRain Home">
-          <div className="nav-logo-icon">
-            <Droplets size={20} color="white" strokeWidth={2.5} />
+    <header className="app-header" role="banner">
+      <div className="header-inner">
+        {/* Left: Brand Logo */}
+        <a
+          className="brand-logo"
+          href="#dashboard"
+          onClick={e => { e.preventDefault(); onNavigate('dashboard'); }}
+          aria-label="EcoRain Platform"
+        >
+          <div className="brand-icon">
+            <Droplets size={18} strokeWidth={2.5} />
           </div>
-          <span className="nav-logo-text">EcoRain</span>
+          <span className="brand-title">EcoRain</span>
         </a>
 
-        {/* Nav Links */}
-        <div className="nav-links" role="menubar">
+        {/* Center: Desktop Navigation */}
+        <nav className="desktop-nav" role="navigation" aria-label="Main navigation">
           {NAV_LINKS.map(link => (
             <button
               key={link.id}
-              className={`nav-link${activePage === link.id ? ' active' : ''}`}
+              className={`nav-item${activePage === link.id ? ' active' : ''}`}
               onClick={() => onNavigate(link.id)}
               role="menuitem"
               aria-current={activePage === link.id ? 'page' : undefined}
@@ -48,39 +52,23 @@ export function Header({
               {link.label}
             </button>
           ))}
-        </div>
+        </nav>
 
-        {/* Right side */}
-        <div className="nav-right">
+        {/* Right: Telemetry & Hardware Status */}
+        <div className="header-telemetry">
           {lastUpdated && (
-            <span className="text-xs text-muted" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Zap size={11} style={{ color: 'var(--primary-400)' }} />
-              {formatTimeSince(lastUpdated)}
-              {apiResponseMs !== null && (
-                <span className="text-xs" style={{ color: 'var(--text-dim)' }}>· {apiResponseMs}ms</span>
+            <div className="telemetry-meta" title="Last successful data refresh">
+              <Clock size={12} className="pulse-icon" />
+              <span>{formatTimeSince(lastUpdated)}</span>
+              {connectionStatus === 'connected' && apiResponseMs !== null && (
+                <span>· {apiResponseMs}ms</span>
               )}
-            </span>
-          )}
-
-          {isDemoMode && (
-            <span style={{
-              background: 'rgba(0,180,216,0.12)',
-              color: 'var(--primary-300)',
-              border: '1px solid rgba(0,180,216,0.25)',
-              borderRadius: 'var(--radius-full)',
-              padding: '3px 10px',
-              fontSize: '0.7rem',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-            }}>
-              DEMO
-            </span>
+            </div>
           )}
 
           <ConnectionStatusBadge status={connectionStatus} ip={ip} />
         </div>
       </div>
-    </nav>
+    </header>
   );
 }

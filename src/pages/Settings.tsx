@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Settings, Wifi, WifiOff, Trash2 } from 'lucide-react';
-import { getEsp8266Ip, setEsp8266Ip, clearEsp8266Ip } from '../config/deviceConfig';
+import { Settings, Wifi, WifiOff, Trash2, Cpu, Sliders, Palette, CheckCircle2 } from 'lucide-react';
+import { getEsp8266Ip, setEsp8266Ip, clearEsp8266Ip, SOIL_DRY_THRESHOLD, SOIL_MOIST_THRESHOLD, TANK_LOW_THRESHOLD, POLLING_INTERVAL_MS } from '../config/deviceConfig';
 import { testConnection } from '../services/esp8266Service';
 
 interface SettingsPageProps {
@@ -41,43 +41,66 @@ export function SettingsPage({ onModeChange }: SettingsPageProps) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 600 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 760 }}>
+      {/* Page Header */}
       <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Settings size={20} color="var(--primary-400)" />
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.25rem', fontWeight: 800 }}>Device Settings</h1>
-        </div>
-        <p className="text-sm text-muted">Configure the ESP8266 connection. Leave blank to use Demo Mode.</p>
+        <h1 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Settings size={20} color="var(--water-400)" />
+          System & Hardware Configuration
+        </h1>
+        <p className="text-xs text-muted mt-1">
+          Network connectivity parameters, irrigation firmware thresholds, and UI telemetry preferences.
+        </p>
       </div>
 
-      {/* IP Config */}
+      {/* ─── Device Connection Section ───────────────────────────── */}
       <div className="card">
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 700, marginBottom: 4 }}>
-          ESP8266 Connection
-        </h2>
-        <p className="text-xs text-muted mb-6">
-          Enter the IP address assigned to the ESP8266 by your router. The dashboard will construct
-          <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--primary-300)', margin: '0 4px' }}>http://&lt;IP&gt;/api/data</code>
-          and
-          <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--primary-300)', margin: '0 4px' }}>http://&lt;IP&gt;/control?action=…</code>
+        <div className="card-header">
+          <div className="card-title-group">
+            <h2 className="card-title">ESP8266 Microcontroller Network</h2>
+            <span className="card-subtitle">Target IP address on local Wi-Fi subnet</span>
+          </div>
+          <div className="card-icon-badge">
+            <Cpu size={18} />
+          </div>
+        </div>
+
+        <p className="text-xs text-secondary mb-4">
+          Enter the IPv4 address assigned to your ESP8266 by the local router. The dashboard will communicate directly with
+          <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--water-300)', margin: '0 4px', background: 'var(--bg-surface)', padding: '2px 4px', borderRadius: 4 }}>
+            http://&lt;IP&gt;/api/data
+          </code>
+          and send control signals to
+          <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--water-300)', margin: '0 4px', background: 'var(--bg-surface)', padding: '2px 4px', borderRadius: 4 }}>
+            http://&lt;IP&gt;/control
+          </code>.
         </p>
 
-        <div className="form-group mb-4">
-          <label className="label" htmlFor="input-esp8266-ip">ESP8266 IP Address</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+          <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }} htmlFor="input-esp8266-ip">
+            ESP8266 IPv4 Address
+          </label>
           <input
             id="input-esp8266-ip"
-            className="input input-mono"
             type="text"
-            placeholder="192.168.1.100"
+            placeholder="e.g. 192.168.1.100"
             value={ip}
             onChange={e => setIp(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSave()}
-            aria-label="ESP8266 IP Address"
-            autoComplete="off"
-            spellCheck={false}
+            style={{
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-card)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
+              color: 'var(--text-primary)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.88rem',
+              outline: 'none',
+              maxWidth: 320,
+            }}
           />
           <span className="text-xs text-muted">
-            Example: <span className="font-mono" style={{ color: 'var(--primary-300)' }}>192.168.1.100</span>
+            Leave blank to engage the internal simulation engine for offline presentations.
           </span>
         </div>
 
@@ -86,9 +109,8 @@ export function SettingsPage({ onModeChange }: SettingsPageProps) {
             className="btn btn-primary"
             onClick={handleSave}
             id="btn-save-ip"
-            aria-label="Save IP address and connect"
           >
-            {saved ? '✓ Saved' : 'Save & Connect'}
+            {saved ? <><CheckCircle2 size={15} /> Saved</> : 'Save & Connect'}
           </button>
 
           <button
@@ -96,12 +118,11 @@ export function SettingsPage({ onModeChange }: SettingsPageProps) {
             onClick={handleTest}
             disabled={!ip.trim() || testState === 'testing'}
             id="btn-test-connection"
-            aria-label="Test ESP8266 connection"
           >
             {testState === 'testing' ? (
-              <><span className="spinner" />Testing…</>
+              <span>Testing Ping…</span>
             ) : (
-              <><Wifi size={15} />Test Connection</>
+              <><Wifi size={15} /> Ping /api/data</>
             )}
           </button>
 
@@ -110,63 +131,120 @@ export function SettingsPage({ onModeChange }: SettingsPageProps) {
               className="btn btn-ghost"
               onClick={handleClear}
               id="btn-clear-ip"
-              aria-label="Clear IP and switch to demo mode"
               style={{ color: 'var(--red-400)' }}
             >
-              <Trash2 size={15} /> Clear (Demo Mode)
+              <Trash2 size={15} /> Disconnect (Simulation Mode)
             </button>
           )}
         </div>
 
-        {/* Test result */}
+        {/* Test Result Message */}
         {testState === 'success' && (
-          <div style={{
-            marginTop: 14, display: 'flex', alignItems: 'center', gap: 8,
-            color: 'var(--green-400)', fontSize: '0.875rem', fontWeight: 600,
-          }}>
-            <Wifi size={16} /> 🟢 ESP8266 reachable — /api/data responded successfully
+          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--green-400)', fontSize: '0.82rem', fontWeight: 600 }}>
+            <Wifi size={15} /> Controller reachable — /api/data responded successfully
           </div>
         )}
         {testState === 'fail' && (
-          <div style={{
-            marginTop: 14, display: 'flex', alignItems: 'center', gap: 8,
-            color: 'var(--red-400)', fontSize: '0.875rem', fontWeight: 600,
-          }}>
-            <WifiOff size={16} /> 🔴 Unable to reach ESP8266 at {ip}
+          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red-400)', fontSize: '0.82rem', fontWeight: 600 }}>
+            <WifiOff size={15} /> Unable to reach controller at {ip}. Verify Wi-Fi connectivity.
           </div>
         )}
       </div>
 
-      {/* Demo Mode Info */}
-      <div className="card card-cyan">
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 700, marginBottom: 8 }}>
-          Demo Mode
-        </h2>
-        <p className="text-sm text-muted mb-3">
-          When no IP address is saved, the dashboard runs in Demo Mode with a realistic simulation engine.
-          Soil moisture gradually depletes, triggering simulated irrigation. The tank level depletes when Pump 1 runs.
-        </p>
-        <div style={{
-          background: 'rgba(0,180,216,0.08)',
-          border: '1px solid rgba(0,180,216,0.2)',
-          borderRadius: 'var(--radius-md)',
-          padding: '10px 14px',
-          fontSize: '0.8rem',
-          color: 'var(--primary-300)',
-        }}>
-          Demo mode is suitable for presentations and UI testing. It does not communicate with any hardware.
+      {/* ─── Irrigation Firmware Thresholds ──────────────────────── */}
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title-group">
+            <h2 className="card-title">Irrigation Logic Thresholds</h2>
+            <span className="card-subtitle">Autonomous firmware switching parameters</span>
+          </div>
+          <div className="card-icon-badge">
+            <Sliders size={18} />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+          <div style={{ background: 'var(--bg-surface)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Soil Dry Threshold
+            </div>
+            <div className="font-mono" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--red-400)', marginTop: 4 }}>
+              &lt; {SOIL_DRY_THRESHOLD}%
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+              Triggers automatic pump activation.
+            </div>
+          </div>
+
+          <div style={{ background: 'var(--bg-surface)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Soil Moist Target
+            </div>
+            <div className="font-mono" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--green-400)', marginTop: 4 }}>
+              ≥ {SOIL_MOIST_THRESHOLD}%
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+              Hysteresis cutoff stopping irrigation.
+            </div>
+          </div>
+
+          <div style={{ background: 'var(--bg-surface)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Tank Low Threshold
+            </div>
+            <div className="font-mono" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--amber-400)', marginTop: 4 }}>
+              ≤ {TANK_LOW_THRESHOLD}%
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+              Switches source from Pump 1 to Pump 2.
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Security note */}
-      <div className="card" style={{ borderColor: 'rgba(168,85,247,0.2)' }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 700, marginBottom: 8, color: 'var(--purple-300)' }}>
-          Security Note
-        </h2>
-        <p className="text-sm text-muted">
-          This dashboard does not store Wi-Fi credentials. The ESP8266 stores its own Wi-Fi configuration in firmware.
-          Only the device IP address is saved locally in your browser.
-        </p>
+      {/* ─── Telemetry & Display Parameters ──────────────────────── */}
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title-group">
+            <h2 className="card-title">Telemetry & Polling Engine</h2>
+            <span className="card-subtitle">Client-side refresh timings & UI configuration</span>
+          </div>
+          <div className="card-icon-badge">
+            <Palette size={18} />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>Polling Rate</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Interval between background HTTP GET /api/data requests</div>
+            </div>
+            <span className="font-mono text-sm" style={{ fontWeight: 600, color: 'var(--water-300)' }}>
+              {POLLING_INTERVAL_MS} ms (2.0s)
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
+            <div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>Visual Interface Theme</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>High-contrast dark IoT monitoring palette</div>
+            </div>
+            <span className="font-mono text-sm text-secondary">
+              EcoRain Deep Navy
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
+            <div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>Simulation Engine</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Active when no physical ESP8266 IP address is bound</div>
+            </div>
+            <span className="font-mono text-sm" style={{ color: getEsp8266Ip() ? 'var(--text-muted)' : 'var(--water-400)' }}>
+              {getEsp8266Ip() ? 'Inactive (Hardware Bound)' : 'Ready / Active'}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );

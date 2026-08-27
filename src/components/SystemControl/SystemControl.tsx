@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Power, Settings, AlertOctagon } from 'lucide-react';
+import { Settings2, Power, AlertOctagon, RefreshCw } from 'lucide-react';
 import type { ControlAction } from '../../types/ecoRain';
 
 interface SystemControlProps {
@@ -9,124 +9,125 @@ interface SystemControlProps {
 }
 
 export function SystemControl({ autoMode, isLoading, onSendCommand }: SystemControlProps) {
-  const [confirm, setConfirm] = useState(false);
-  const [sending, setSending] = useState<ControlAction | null>(null);
+  const [confirmStopAll, setConfirmStopAll] = useState(false);
+  const [busyAction, setBusyAction] = useState<ControlAction | null>(null);
 
   async function handleToggle() {
-    if (autoMode === null) return;
-    const action: ControlAction = autoMode ? 'manual' : 'auto';
-    setSending(action);
-    await onSendCommand(action);
-    setSending(null);
+    if (autoMode === null || isLoading || busyAction) return;
+    const targetAction: ControlAction = autoMode ? 'manual' : 'auto';
+    setBusyAction(targetAction);
+    await onSendCommand(targetAction);
+    setBusyAction(null);
   }
 
-  async function handleStopAll() {
-    setConfirm(false);
-    setSending('all_off');
+  async function handleConfirmStopAll() {
+    setConfirmStopAll(false);
+    setBusyAction('all_off');
     await onSendCommand('all_off');
-    setSending(null);
+    setBusyAction(null);
   }
-
-  const isToggling = sending === 'auto' || sending === 'manual';
-  const isStopping = sending === 'all_off';
 
   return (
     <>
-      <div className="card animate-in" role="region" aria-label="System Control">
-        <div className="flex items-center gap-2 mb-4">
-          <Settings size={18} color="var(--primary-400)" />
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 700 }}>
-            System Control
-          </h2>
-        </div>
-
-        {/* Auto/Manual Toggle */}
-        <div style={{ marginBottom: 20 }}>
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Irrigation Mode
-              </p>
-              <p className="text-xs text-muted mt-1">
-                {autoMode === null ? 'Loading…' : autoMode ? 'System controls pumps automatically' : 'Manual pump control active'}
-              </p>
-            </div>
-            {isToggling ? (
-              <span className="spinner" style={{ color: 'var(--primary-400)' }} />
-            ) : (
-              <button
-                className={`toggle${autoMode ? ' on' : ''}`}
-                onClick={handleToggle}
-                disabled={isLoading || autoMode === null}
-                aria-pressed={autoMode ?? false}
-                aria-label={`Switch to ${autoMode ? 'manual' : 'automatic'} mode`}
-                id="toggle-auto-mode"
-              >
-                <span className="toggle-thumb" />
-              </button>
-            )}
-          </div>
-
-          {/* Mode badge */}
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '4px 12px',
-            borderRadius: 'var(--radius-full)',
-            fontSize: '0.7rem',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            background: autoMode ? 'rgba(0,180,216,0.12)' : 'rgba(168,85,247,0.12)',
-            color: autoMode ? 'var(--primary-400)' : 'var(--purple-300)',
-            border: `1px solid ${autoMode ? 'rgba(0,180,216,0.25)' : 'rgba(168,85,247,0.25)'}`,
-          }}>
-            <Power size={10} />
-            {autoMode === null ? 'Loading' : autoMode ? 'Automatic' : 'Manual'}
-          </div>
-        </div>
-
-        <div style={{ height: 1, background: 'var(--border-subtle)', margin: '16px 0' }} />
-
-        {/* Stop All */}
+      <div className="card decision-card" role="region" aria-label="System Control Panel">
         <div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 10 }}>
-            Emergency stop — disables all pumps and switches to manual mode.
-          </p>
+          <div className="card-header">
+            <div className="card-title-group">
+              <h2 className="card-title">System Control</h2>
+              <span className="card-subtitle">Operational Mode & Hardware Overrides</span>
+            </div>
+            <div className="card-icon-badge" style={{ color: 'var(--water-400)' }}>
+              <Settings2 size={18} />
+            </div>
+          </div>
+
+          {/* Automatic / Manual Mode Toggle */}
+          <div className="control-mode-toggle-row">
+            <div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>Automatic Mode</span>
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    borderRadius: 'var(--radius-xs)',
+                    background: autoMode ? 'rgba(34, 197, 94, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                    color: autoMode ? 'var(--green-400)' : 'var(--amber-400)',
+                    border: `1px solid ${autoMode ? 'rgba(34, 197, 94, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
+                  }}
+                >
+                  {autoMode === null ? 'SYNCING' : autoMode ? 'ACTIVE' : 'MANUAL OVERRIDE'}
+                </span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                {autoMode
+                  ? 'Firmware regulates irrigation autonomously based on moisture thresholds'
+                  : 'Manual pump control enabled. Automated thresholds bypassed.'}
+              </div>
+            </div>
+
+            <button
+              className={`control-switch${autoMode ? ' on' : ''}`}
+              onClick={handleToggle}
+              disabled={isLoading || autoMode === null || busyAction !== null}
+              aria-label={`Toggle ${autoMode ? 'manual' : 'automatic'} mode`}
+              id="toggle-auto-mode"
+            >
+              <span className="control-switch-knob" />
+            </button>
+          </div>
+        </div>
+
+        {/* Emergency Stop Action */}
+        <div style={{ marginTop: 12 }}>
           <button
             className="btn btn-red btn-full"
-            onClick={() => setConfirm(true)}
-            disabled={isLoading || isStopping}
-            id="btn-stop-all"
-            aria-label="Stop all pumps"
+            onClick={() => setConfirmStopAll(true)}
+            disabled={isLoading || busyAction === 'all_off'}
+            id="btn-stop-all-pumps"
+            aria-label="Emergency Stop All Pumps"
           >
-            {isStopping ? (
-              <><span className="spinner" />Stopping…</>
+            {busyAction === 'all_off' ? (
+              <><RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} /> Stopping All Pumps…</>
             ) : (
-              <><AlertOctagon size={16} />STOP ALL PUMPS</>
+              <><AlertOctagon size={16} /> STOP ALL PUMPS</>
             )}
           </button>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: 6 }}>
+            Safely disconnects both pumps and resets system to Manual Mode.
+          </div>
         </div>
       </div>
 
-      {/* Confirmation Modal */}
-      {confirm && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="stop-modal-title">
-          <div className="modal">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <AlertOctagon size={22} color="var(--red-400)" />
-              <h3 className="modal-title" id="stop-modal-title">Stop All Pumps?</h3>
+      {/* Confirmation Modal for Stop All */}
+      {confirmStopAll && (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-stop-title">
+          <div className="modal-box">
+            <div className="modal-header">
+              <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red-400)' }}>
+                <AlertOctagon size={20} />
+              </div>
+              <h3 className="modal-title" id="modal-stop-title">Stop all pumps?</h3>
             </div>
             <p className="modal-desc">
-              This will immediately stop both pumps and switch the system to <strong>Manual Mode</strong>. The system will not irrigate automatically until Automatic Mode is re-enabled.
+              This will immediately send an emergency cutoff signal to stop both <strong>Pump 1 (Rainwater)</strong> and <strong>Pump 2 (Backup)</strong>, switching the system to <strong>Manual Mode</strong>.
             </p>
             <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={() => setConfirm(false)} id="btn-stop-cancel">
+              <button
+                className="btn btn-ghost"
+                onClick={() => setConfirmStopAll(false)}
+                id="btn-modal-stop-cancel"
+              >
                 Cancel
               </button>
-              <button className="btn btn-red" onClick={handleStopAll} id="btn-stop-confirm">
-                <AlertOctagon size={15} /> Stop All Pumps
+              <button
+                className="btn btn-red"
+                onClick={handleConfirmStopAll}
+                id="btn-modal-stop-confirm"
+              >
+                <Power size={15} /> Stop All Pumps
               </button>
             </div>
           </div>

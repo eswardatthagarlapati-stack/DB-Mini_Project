@@ -6,24 +6,30 @@ interface ConnectionStatusBadgeProps {
 }
 
 export function ConnectionStatusBadge({ status, ip }: ConnectionStatusBadgeProps) {
-  const map = {
-    connected:  { cls: 'badge-connected',  dot: 'dot-green',  label: 'ESP8266 Connected', pulse: true },
-    connecting: { cls: 'badge-connecting', dot: 'dot-amber',  label: 'Connecting…',       pulse: true },
-    offline:    { cls: 'badge-offline',    dot: 'dot-red',    label: 'ESP8266 Offline',   pulse: false },
-    demo:       { cls: 'badge-demo',       dot: 'dot-cyan',   label: 'Demo Mode',         pulse: false },
-  };
+  // If status is demo, render as subtle Offline status in header as requested
+  if (status === 'connected') {
+    return (
+      <div className="conn-badge connected" title={ip ? `Connected to ${ip}` : 'ESP8266 Connected'}>
+        <span className="status-dot green" />
+        <span>ESP8266 Connected</span>
+      </div>
+    );
+  }
 
-  const cfg = map[status];
+  if (status === 'connecting') {
+    return (
+      <div className="conn-badge connecting">
+        <span className="status-dot amber" />
+        <span>Connecting…</span>
+      </div>
+    );
+  }
 
+  // Offline / Demo
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span className={`badge ${cfg.cls}`}>
-        <span className={`dot ${cfg.dot}${cfg.pulse ? ' dot-pulse' : ''}`} />
-        {cfg.label}
-      </span>
-      {ip && status === 'connected' && (
-        <span className="text-xs text-muted font-mono">{ip}</span>
-      )}
+    <div className="conn-badge offline" title="No hardware connected">
+      <span className="status-dot gray" />
+      <span>Offline</span>
     </div>
   );
 }

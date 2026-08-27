@@ -8,47 +8,66 @@ interface SensorCardProps {
   value: number | null;
   unit?: string;
   unavailable?: boolean;
+  unavailableText?: string;
+  statusLabel?: string;
+  statusColor?: string;
   children?: ReactNode;
-  accentClass?: string;
   style?: React.CSSProperties;
 }
 
 export function SensorCard({
-  title, subtitle, icon, iconColor = 'var(--primary-400)',
-  value, unit, unavailable, children, accentClass = '', style
+  title, subtitle, icon, iconColor = 'var(--water-400)',
+  value, unit, unavailable, unavailableText = 'UNAVAILABLE', statusLabel, statusColor, children, style
 }: SensorCardProps) {
   return (
-    <div className={`card animate-in ${accentClass}`} style={style} role="region" aria-label={title}>
-      {/* Header row */}
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <p className="metric-label">{title}</p>
-          {subtitle && <p className="text-xs text-muted mt-1">{subtitle}</p>}
+    <div className="card" style={style} role="region" aria-label={title}>
+      {/* Header */}
+      <div className="card-header">
+        <div className="card-title-group">
+          <h2 className="card-title">{title}</h2>
+          {subtitle && <span className="card-subtitle">{subtitle}</span>}
         </div>
-        <div style={{
-          width: 40, height: 40,
-          borderRadius: 'var(--radius-md)',
-          background: `${iconColor}18`,
-          border: `1px solid ${iconColor}30`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: iconColor,
-          flexShrink: 0,
-        }}>
+        <div
+          className="card-icon-badge"
+          style={{ color: iconColor, background: `${iconColor}15` }}
+        >
           {icon}
         </div>
       </div>
 
-      {/* Value */}
-      {unavailable ? (
-        <p className="metric-unavailable">—</p>
-      ) : (
-        <p className="metric-value" aria-live="polite">
-          {value !== null ? value.toFixed(value % 1 === 0 ? 0 : 1) : '—'}
-          {value !== null && unit && <span className="metric-unit">{unit}</span>}
-        </p>
+      {/* Main Metric Value */}
+      <div className="metric-value-display">
+        {unavailable ? (
+          <span className="metric-unavailable">{unavailableText}</span>
+        ) : (
+          <>
+            <span className="metric-number">
+              {value !== null ? (value % 1 === 0 ? value : value.toFixed(1)) : '—'}
+            </span>
+            {value !== null && unit && <span className="metric-unit">{unit}</span>}
+          </>
+        )}
+      </div>
+
+      {/* Status indicator tag if provided */}
+      {statusLabel && (
+        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              fontFamily: 'var(--font-mono)',
+              color: statusColor || 'var(--text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+            }}
+          >
+            ● {statusLabel}
+          </span>
+        </div>
       )}
 
-      {/* Slot for extra content */}
+      {/* Optional visualizations */}
       {children}
     </div>
   );

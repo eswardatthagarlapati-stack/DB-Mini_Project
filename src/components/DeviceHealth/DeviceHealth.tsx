@@ -17,54 +17,78 @@ function getSensorHealth(data: EcoRainData | null): {
   const dht22  = data.temperature > 0 && data.humidity > 0 ? 'healthy' : 'error';
   const soil   = data.soilRaw >= 0 ? 'healthy' : 'error';
   const hcsr04 = data.distance >= 0 ? 'healthy' : 'warning';
-  const esp8266: SensorHealth = 'healthy'; // if we got data, ESP8266 is up
+  const esp8266: SensorHealth = 'healthy';
 
   return { dht22, soil, hcsr04, esp8266 };
 }
 
 const DEVICES = [
-  { key: 'esp8266', label: 'ESP8266', desc: 'Main controller' },
-  { key: 'dht22',   label: 'DHT22',   desc: 'Temp & humidity' },
-  { key: 'soil',    label: 'Soil Sensor', desc: 'Analog A0' },
-  { key: 'hcsr04',  label: 'HC-SR04', desc: 'Ultrasonic distance' },
+  { key: 'esp8266', label: 'ESP8266 Microcontroller', pin: 'Wi-Fi / Core MCU' },
+  { key: 'dht22',   label: 'DHT22 Temp & Humidity',    pin: 'GPIO Pin D4' },
+  { key: 'soil',    label: 'Capacitive Soil Sensor',  pin: 'Analog Pin A0' },
+  { key: 'hcsr04',  label: 'HC-SR04 Ultrasonic Tank', pin: 'Pins D5 (Trig) / D6 (Echo)' },
 ] as const;
 
-const HEALTH_CONFIG: Record<SensorHealth, { dot: string; label: string; color: string }> = {
-  healthy: { dot: 'health-dot healthy', label: 'Healthy', color: 'var(--green-400)' },
-  warning: { dot: 'health-dot warning', label: 'Warning', color: 'var(--amber-400)' },
-  error:   { dot: 'health-dot error',   label: 'Error',   color: 'var(--red-400)' },
-  unknown: { dot: 'health-dot unknown', label: 'Unknown', color: 'var(--text-dim)' },
+const HEALTH_CONFIG: Record<SensorHealth, { label: string; color: string; dotClass: string }> = {
+  healthy: { label: 'HEALTHY', color: 'var(--green-400)', dotClass: 'green' },
+  warning: { label: 'SIGNAL WARNING', color: 'var(--amber-400)', dotClass: 'amber' },
+  error:   { label: 'ERROR', color: 'var(--red-400)', dotClass: 'red' },
+  unknown: { label: 'OFFLINE', color: 'var(--text-muted)', dotClass: 'gray' },
 };
 
-export function DeviceHealth({ data, connectionStatus }: DeviceHealthProps) {
+export function DeviceHealth({ data }: DeviceHealthProps) {
   const health = getSensorHealth(data);
 
   return (
-    <div className="card animate-in" role="region" aria-label="Device Health">
-      <div className="flex items-center gap-2 mb-4">
-        <Cpu size={18} color="var(--primary-400)" />
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 700 }}>
-          Device Health
-        </h2>
-        {connectionStatus === 'offline' && (
-          <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--red-400)', fontWeight: 600 }}>
-            ESP8266 Offline
-          </span>
-        )}
+    <div className="card" role="region" aria-label="Hardware Sensor Health">
+      <div className="card-header">
+        <div className="card-title-group">
+          <h2 className="card-title">Hardware Telemetry Health</h2>
+          <span className="card-subtitle">Pin integrity & microcontroller diagnostics</span>
+        </div>
+        <div className="card-icon-badge">
+          <Cpu size={18} />
+        </div>
       </div>
 
-      <div className="health-grid">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {DEVICES.map(d => {
           const h = health[d.key];
           const cfg = HEALTH_CONFIG[h];
           return (
-            <div key={d.key} className="health-item">
-              <div className={cfg.dot} aria-hidden="true" />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{d.label}</div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{d.desc}</div>
+            <div
+              key={d.key}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {d.label}
+                </div>
+                <div className="font-mono text-xs text-muted" style={{ marginTop: 1 }}>
+                  {d.pin}
+                </div>
               </div>
-              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: cfg.color }}>
+
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: '0.72rem',
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 700,
+                  color: cfg.color,
+                }}
+              >
+                <span className={`status-dot ${cfg.dotClass}`} />
                 {cfg.label}
               </span>
             </div>

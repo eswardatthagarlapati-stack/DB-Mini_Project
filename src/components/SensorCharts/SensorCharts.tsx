@@ -1,136 +1,132 @@
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { BarChart2 } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import type { HistoryPoint } from '../../types/ecoRain';
-import type { ReactNode } from 'react';
 import { formatTime } from '../../utils/formatters';
 
 interface SensorChartsProps {
   history: HistoryPoint[];
 }
 
-const CHART_COLORS = {
-  temperature:  '#22d3ee',
+const CHART_THEME = {
+  temperature:  '#38bdf8',
   humidity:     '#4ade80',
-  soilMoisture: '#fbbf24',
+  soilMoisture: '#f59e0b',
   waterLevel:   '#a78bfa',
 };
 
-function chartData(history: HistoryPoint[]) {
-  return history.map(p => ({
-    time: formatTime(new Date(p.timestamp)),
-    temperature: p.temperature,
-    humidity: p.humidity,
-    soilMoisture: p.soilMoisture,
-    waterLevel: p.waterLevel,
-  }));
-}
-
 const tooltipStyle = {
-  background: '#0b1a30',
-  border: '1px solid rgba(0,180,216,0.25)',
+  background: '#0a1526',
+  border: '1px solid rgba(148, 163, 184, 0.2)',
   borderRadius: 8,
-  color: '#e8f4f8',
-  fontSize: '0.8rem',
+  color: '#f1f5f9',
+  fontSize: '0.78rem',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
 };
 
-const gridStyle = { stroke: 'rgba(255,255,255,0.05)', strokeDasharray: '3 3' };
-const axisStyle = { fill: '#4a7a94', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' };
+const gridStyle = { stroke: 'rgba(148, 163, 184, 0.08)', strokeDasharray: '3 3' };
+const axisStyle = { fill: '#64748b', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' };
 
-function ChartSection({ title, children }: { title: string; children: ReactNode }) {
+function MiniTelemetryChart({
+  title, dataKey, data, stroke, unit, domain
+}: {
+  title: string;
+  dataKey: string;
+  data: Array<{ time: string; [k: string]: number | string }>;
+  stroke: string;
+  unit: string;
+  domain?: [number, number] | ['auto', 'auto'];
+}) {
   return (
-    <div>
-      <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10 }}>{title}</p>
-      <div style={{ height: 160 }}>
-        {children}
+    <div style={{ background: 'var(--bg-surface)', padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          {title}
+        </span>
+        <span style={{ fontSize: '0.7rem', color: stroke, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+          {unit}
+        </span>
+      </div>
+      <div style={{ height: 130 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data}>
+            <CartesianGrid {...gridStyle} />
+            <XAxis dataKey="time" tick={axisStyle} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <YAxis tick={axisStyle} tickLine={false} axisLine={false} width={28} domain={domain ?? ['auto', 'auto']} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${v} ${unit}`, title]} />
+            <Line type="monotone" dataKey={dataKey} stroke={stroke} strokeWidth={2} dot={false} isAnimationActive={false} />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
 }
 
 export function SensorCharts({ history }: SensorChartsProps) {
-  const data = chartData(history);
+  const data = history.map(p => ({
+    time: formatTime(new Date(p.timestamp)),
+    temperature: p.temperature,
+    humidity: p.humidity,
+    soilMoisture: p.soilMoisture,
+    waterLevel: p.waterLevel,
+  }));
 
-  const noData = data.length < 2;
+  const hasData = data.length >= 2;
 
   return (
-    <div className="card animate-in" style={{ gridColumn: '1 / -1' }} role="region" aria-label="Session History Charts">
-      <div className="flex items-center gap-2 mb-4">
-        <BarChart2 size={18} color="var(--primary-400)" />
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 700 }}>
-          Live Sensor Analytics
-        </h2>
-        <span style={{
-          marginLeft: 'auto',
-          fontSize: '0.7rem',
-          color: 'var(--text-muted)',
-          background: 'var(--bg-elevated)',
-          padding: '2px 8px',
-          borderRadius: 'var(--radius-full)',
-          border: '1px solid var(--border-subtle)',
-        }}>
-          Session History — {data.length} pts
-        </span>
+    <div className="card" role="region" aria-label="Live Sensor Analytics">
+      <div className="card-header">
+        <div className="card-title-group">
+          <h2 className="card-title">Live Sensor Telemetry</h2>
+          <span className="card-subtitle">Real-time session trend analysis ({data.length} telemetry points)</span>
+        </div>
+        <div className="card-icon-badge">
+          <Activity size={18} />
+        </div>
       </div>
 
-      {noData ? (
+      {!hasData ? (
         <div style={{
-          height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--text-muted)', fontSize: '0.875rem',
+          height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--text-muted)', fontSize: '0.82rem',
           border: '1px dashed var(--border-subtle)', borderRadius: 'var(--radius-md)',
         }}>
-          Collecting data… charts will appear after a few readings.
+          Accumulating initial sensor readings…
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 24 }}>
-          <ChartSection title="Temperature (°C)">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data}>
-                <CartesianGrid {...gridStyle} />
-                <XAxis dataKey="time" tick={axisStyle} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                <YAxis tick={axisStyle} tickLine={false} axisLine={false} width={32} domain={['auto', 'auto']} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Line type="monotone" dataKey="temperature" stroke={CHART_COLORS.temperature} strokeWidth={2} dot={false} name="°C" />
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartSection>
-
-          <ChartSection title="Humidity (%)">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data}>
-                <CartesianGrid {...gridStyle} />
-                <XAxis dataKey="time" tick={axisStyle} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                <YAxis tick={axisStyle} tickLine={false} axisLine={false} width={32} domain={[0, 100]} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Line type="monotone" dataKey="humidity" stroke={CHART_COLORS.humidity} strokeWidth={2} dot={false} name="%" />
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartSection>
-
-          <ChartSection title="Soil Moisture (%)">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data}>
-                <CartesianGrid {...gridStyle} />
-                <XAxis dataKey="time" tick={axisStyle} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                <YAxis tick={axisStyle} tickLine={false} axisLine={false} width={32} domain={[0, 100]} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Line type="monotone" dataKey="soilMoisture" stroke={CHART_COLORS.soilMoisture} strokeWidth={2} dot={false} name="%" />
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartSection>
-
-          <ChartSection title="Tank Level (%)">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data}>
-                <CartesianGrid {...gridStyle} />
-                <XAxis dataKey="time" tick={axisStyle} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                <YAxis tick={axisStyle} tickLine={false} axisLine={false} width={32} domain={[0, 100]} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Line type="monotone" dataKey="waterLevel" stroke={CHART_COLORS.waterLevel} strokeWidth={2} dot={false} name="%" />
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartSection>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+          <MiniTelemetryChart
+            title="Temperature"
+            dataKey="temperature"
+            data={data}
+            stroke={CHART_THEME.temperature}
+            unit="°C"
+          />
+          <MiniTelemetryChart
+            title="Humidity"
+            dataKey="humidity"
+            data={data}
+            stroke={CHART_THEME.humidity}
+            unit="%"
+            domain={[0, 100]}
+          />
+          <MiniTelemetryChart
+            title="Soil Moisture"
+            dataKey="soilMoisture"
+            data={data}
+            stroke={CHART_THEME.soilMoisture}
+            unit="%"
+            domain={[0, 100]}
+          />
+          <MiniTelemetryChart
+            title="Tank Level"
+            dataKey="waterLevel"
+            data={data}
+            stroke={CHART_THEME.waterLevel}
+            unit="%"
+            domain={[0, 100]}
+          />
         </div>
       )}
     </div>

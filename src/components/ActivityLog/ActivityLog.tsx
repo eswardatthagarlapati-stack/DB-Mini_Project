@@ -1,4 +1,4 @@
-import { ScrollText, Info, CheckCircle, AlertTriangle, AlertOctagon, Zap, Settings } from 'lucide-react';
+import { ScrollText, Info, CheckCircle2, AlertTriangle, AlertOctagon, Zap, Settings2 } from 'lucide-react';
 import type { ActivityEntry } from '../../types/ecoRain';
 import { formatTime } from '../../utils/formatters';
 
@@ -7,52 +7,60 @@ interface ActivityLogProps {
 }
 
 const ICONS: Record<ActivityEntry['type'], React.ReactNode> = {
-  info:    <Info size={13} color="var(--primary-400)" />,
-  success: <CheckCircle size={13} color="var(--green-400)" />,
+  info:    <Info size={13} color="var(--water-400)" />,
+  success: <CheckCircle2 size={13} color="var(--green-400)" />,
   warning: <AlertTriangle size={13} color="var(--amber-400)" />,
   error:   <AlertOctagon size={13} color="var(--red-400)" />,
-  pump:    <Zap size={13} color="var(--primary-300)" />,
-  system:  <Settings size={13} color="var(--purple-300)" />,
+  pump:    <Zap size={13} color="var(--water-300)" />,
+  system:  <Settings2 size={13} color="#c084fc" />,
 };
 
 export function ActivityLog({ entries }: ActivityLogProps) {
   return (
-    <div className="card animate-in" role="region" aria-label="Dashboard Activity Log">
-      <div className="flex items-center gap-2 mb-4">
-        <ScrollText size={18} color="var(--primary-400)" />
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 700 }}>
-          Activity Log
-        </h2>
-        <span style={{
-          marginLeft: 'auto',
-          fontSize: '0.7rem', color: 'var(--text-muted)',
-          background: 'var(--bg-elevated)',
-          padding: '2px 8px',
-          borderRadius: 'var(--radius-full)',
-          border: '1px solid var(--border-subtle)',
-        }}>
-          Dashboard Session Activity
-        </span>
+    <div className="card" role="region" aria-label="System Event Log">
+      <div className="card-header">
+        <div className="card-title-group">
+          <h2 className="card-title">Operational Event Log</h2>
+          <span className="card-subtitle">Recent controller dispatches & threshold state shifts</span>
+        </div>
+        <div className="card-icon-badge">
+          <ScrollText size={18} />
+        </div>
       </div>
 
       {entries.length === 0 ? (
         <div style={{
-          height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--text-dim)', fontSize: '0.875rem',
+          height: 90, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--text-muted)', fontSize: '0.8rem',
           border: '1px dashed var(--border-subtle)', borderRadius: 'var(--radius-md)',
         }}>
-          No activity yet
+          No event records generated in this session.
         </div>
       ) : (
-        <div className="activity-timeline" style={{ maxHeight: 360, overflowY: 'auto' }}>
-          {entries.slice(0, 50).map(entry => (
-            <div key={entry.id} className="activity-item">
-              <div className={`activity-icon-wrap ${entry.type}`} aria-hidden="true">
+        <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, paddingRight: 4 }}>
+          {entries.slice(0, 40).map(entry => (
+            <div
+              key={entry.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '8px 10px',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+              }}
+            >
+              <div style={{ flexShrink: 0 }}>
                 {ICONS[entry.type]}
               </div>
-              <div style={{ flex: 1 }}>
-                <div className="activity-message">{entry.message}</div>
-                <div className="activity-time">{formatTime(entry.timestamp)}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {entry.message}
+                </div>
+              </div>
+              <div className="font-mono text-xs text-muted" style={{ flexShrink: 0, fontSize: '0.7rem' }}>
+                {formatTime(entry.timestamp)}
               </div>
             </div>
           ))}

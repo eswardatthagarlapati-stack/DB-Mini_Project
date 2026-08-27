@@ -1,6 +1,6 @@
-import { AlertTriangle } from 'lucide-react';
+import { Cylinder, AlertTriangle, CheckCircle2, Droplets } from 'lucide-react';
 import { TANK_LOW_THRESHOLD } from '../../config/deviceConfig';
-import { tankStatus } from '../../utils/formatters';
+import { tankTier } from '../../utils/formatters';
 
 interface TankVisualizationProps {
   waterLevel: number | null;
@@ -10,146 +10,134 @@ interface TankVisualizationProps {
 export function TankVisualization({ waterLevel, distance }: TankVisualizationProps) {
   const sensorError = distance !== null && distance < 0;
   const level = (waterLevel !== null && !sensorError) ? Math.max(0, Math.min(100, waterLevel)) : 0;
-  const status = tankStatus(level, TANK_LOW_THRESHOLD, sensorError);
+  const tierInfo = tankTier(level, sensorError || waterLevel === null);
 
-  const waterColor = level > 50
-    ? 'linear-gradient(180deg, rgba(0,180,216,0.75) 0%, rgba(0,100,150,0.95) 100%)'
-    : level > TANK_LOW_THRESHOLD
-    ? 'linear-gradient(180deg, rgba(0,150,200,0.7) 0%, rgba(0,80,130,0.95) 100%)'
-    : 'linear-gradient(180deg, rgba(251,191,36,0.5) 0%, rgba(180,100,0,0.8) 100%)';
+  const waterGradient =
+    tierInfo.tier === 'GOOD'
+      ? 'linear-gradient(180deg, rgba(56, 189, 248, 0.85) 0%, rgba(2, 96, 138, 0.95) 100%)'
+      : tierInfo.tier === 'MODERATE'
+      ? 'linear-gradient(180deg, rgba(14, 165, 233, 0.8) 0%, rgba(3, 105, 161, 0.95) 100%)'
+      : tierInfo.tier === 'LOW'
+      ? 'linear-gradient(180deg, rgba(245, 158, 11, 0.75) 0%, rgba(180, 83, 9, 0.95) 100%)'
+      : 'linear-gradient(180deg, rgba(239, 68, 68, 0.75) 0%, rgba(153, 27, 27, 0.95) 100%)';
 
   return (
-    <div className="card animate-in" style={{ gridColumn: '1 / -1' }} role="region" aria-label="Rainwater Tank">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700 }}>
-            Rainwater Tank
-          </h2>
-          <p className="text-xs text-muted mt-1">HC-SR04 Ultrasonic · Distance measurement</p>
+    <div className="card" role="region" aria-label="Rainwater Storage Tank">
+      {/* Header */}
+      <div className="card-header">
+        <div className="card-title-group">
+          <h2 className="card-title">Rainwater Storage Tank</h2>
+          <span className="card-subtitle">HC-SR04 Ultrasonic Telemetry · Distance to Water Surface</span>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          {sensorError ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--amber-400)', fontSize: '0.8rem', fontWeight: 600 }}>
-              <AlertTriangle size={15} />
-              HC-SR04 Signal Not Detected
-            </div>
-          ) : distance !== null ? (
-            <div>
-              <span className="text-xs text-muted">Distance: </span>
-              <span className="font-mono text-xs" style={{ color: 'var(--primary-300)' }}>{distance.toFixed(1)} cm</span>
-            </div>
-          ) : null}
+        <div className="card-icon-badge" style={{ color: tierInfo.color }}>
+          <Cylinder size={18} />
         </div>
       </div>
 
-      {/* Tank + info */}
-      <div className="flex items-center gap-8" style={{ flexWrap: 'wrap' }}>
-
-        {/* Tank SVG */}
-        <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <div
-            className="tank-outer"
-            style={{ width: 160, height: 220 }}
-            role="img"
-            aria-label={sensorError ? 'Tank level unavailable' : `Tank ${level}% full`}
-          >
-            {sensorError ? (
-              /* Error state */
-              <div style={{
-                position: 'absolute', inset: 0,
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: 8, padding: 16, textAlign: 'center',
-              }}>
-                <AlertTriangle size={28} color="var(--amber-400)" />
-                <span style={{ fontSize: '0.75rem', color: 'var(--amber-400)', fontWeight: 600, lineHeight: 1.4 }}>
-                  Sensor Error<br />
-                  <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Tank level unavailable</span>
-                </span>
-              </div>
-            ) : (
-              <>
-                {/* Water fill */}
-                <div
-                  className="tank-water"
-                  style={{ height: `${level}%`, background: waterColor }}
-                  aria-hidden="true"
-                >
-                  <div className="tank-wave" />
-                </div>
-
-                {/* Level markers */}
-                {[75, 50, 25].map(mark => (
-                  <div key={mark} style={{
-                    position: 'absolute',
-                    top: `${100 - mark}%`,
-                    left: 0, right: 0,
-                    borderTop: '1px dashed rgba(255,255,255,0.12)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    paddingLeft: 6,
-                  }}>
-                    <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', fontFamily: 'var(--font-mono)' }}>
-                      {mark}%
-                    </span>
-                  </div>
-                ))}
-
-                {/* Percentage overlay */}
-                <div className="tank-label-pct">{level}%</div>
-              </>
-            )}
-          </div>
-
-          {/* Threshold label */}
-          <div style={{
-            fontSize: '0.7rem',
-            color: status.color,
-            fontWeight: 600,
-            textAlign: 'center',
-            maxWidth: 160,
-          }}>
-            {status.label}
-          </div>
-        </div>
-
-        {/* Info column */}
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Water level stat */}
-            <StatRow label="Tank Level" value={sensorError ? '—' : `${level}%`} color={status.color} />
-            <StatRow label="Distance (HC-SR04)" value={sensorError ? 'Error' : (distance !== null ? `${distance.toFixed(1)} cm` : '—')} color={sensorError ? 'var(--amber-400)' : 'var(--primary-400)'} />
-            <StatRow label="Low Threshold" value={`≤ ${TANK_LOW_THRESHOLD}%`} color="var(--text-muted)" />
-
-            {/* Status block */}
+      {/* Main visualization grid */}
+      <div className="tank-visual-layout">
+        {/* Cylindrical Technical Tank */}
+        <div className="tank-vessel-wrap" role="img" aria-label={`Tank level: ${tierInfo.tier === 'UNAVAILABLE' ? 'Unavailable' : `${level}%`}`}>
+          {tierInfo.tier === 'UNAVAILABLE' ? (
             <div style={{
-              background: `${status.color}10`,
-              border: `1px solid ${status.color}30`,
-              borderRadius: 'var(--radius-md)',
-              padding: '10px 14px',
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 8, padding: 14, textAlign: 'center',
             }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: status.color, marginBottom: 2 }}>
-                {level > TANK_LOW_THRESHOLD && !sensorError ? 'Rainwater Available' : sensorError ? 'Sensor Error' : 'Rainwater Low'}
-              </div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                {sensorError
-                  ? 'HC-SR04 signal not detected. Cannot determine tank level.'
-                  : level > TANK_LOW_THRESHOLD
-                  ? 'Tank level sufficient. Pump 1 (rainwater) can be used for irrigation.'
-                  : 'Rainwater below threshold. Pump 2 (backup) will be used.'}
-              </div>
+              <AlertTriangle size={26} color="var(--amber-400)" />
+              <span style={{ fontSize: '0.78rem', color: 'var(--amber-400)', fontWeight: 600, lineHeight: 1.3 }}>
+                Sensor Signal Lost<br />
+                <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.7rem' }}>
+                  HC-SR04 signal not detected
+                </span>
+              </span>
             </div>
+          ) : (
+            <>
+              {/* Dynamic Water Body */}
+              <div
+                className="tank-water-body"
+                style={{ height: `${level}%`, background: waterGradient }}
+              >
+                {level > 5 && <div className="tank-wave-top" />}
+              </div>
+
+              {/* Level Markers */}
+              {[75, 50, 25].map(mark => (
+                <div
+                  key={mark}
+                  className="tank-marker"
+                  style={{ top: `${100 - mark}%` }}
+                >
+                  <span className="tank-marker-text">{mark}%</span>
+                </div>
+              ))}
+
+              {/* Central Level Readout */}
+              <div className="tank-center-badge">
+                {level}%
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Technical Companion Telemetry */}
+        <div className="tank-details-col">
+          <div className="tank-metric-row">
+            <span className="text-sm text-secondary">Storage Capacity Status</span>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '3px 10px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+                color: tierInfo.color,
+                background: `${tierInfo.color}15`,
+                border: `1px solid ${tierInfo.color}35`,
+              }}
+            >
+              {tierInfo.tier === 'GOOD' ? <CheckCircle2 size={12} /> : tierInfo.tier === 'UNAVAILABLE' ? <AlertTriangle size={12} /> : <Droplets size={12} />}
+              {tierInfo.tier}
+            </span>
+          </div>
+
+          <div className="tank-metric-row">
+            <span className="text-sm text-secondary">Ultrasonic Distance</span>
+            <span className="font-mono text-sm" style={{ fontWeight: 600, color: sensorError ? 'var(--amber-400)' : 'var(--text-primary)' }}>
+              {sensorError ? 'UNAVAILABLE' : distance !== null ? `${distance.toFixed(1)} cm` : '—'}
+            </span>
+          </div>
+
+          <div className="tank-metric-row">
+            <span className="text-sm text-secondary">Low-Level Switchover Threshold</span>
+            <span className="font-mono text-sm text-muted">≤ {TANK_LOW_THRESHOLD}%</span>
+          </div>
+
+          {/* Operational Advisory Callout */}
+          <div
+            className="tank-callout"
+            style={{
+              borderColor: `${tierInfo.color}30`,
+              background: `${tierInfo.color}0a`,
+            }}
+          >
+            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: tierInfo.color, marginBottom: 3 }}>
+              {tierInfo.desc}
+            </div>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
+              {tierInfo.tier === 'UNAVAILABLE'
+                ? 'Check HC-SR04 pin connections (D5/D6). The firmware returns -1 when no echo pulse is detected.'
+                : tierInfo.tier === 'GOOD' || tierInfo.tier === 'MODERATE'
+                ? 'Rainwater volume is sufficient. Automatic irrigation will preferentially draw from Pump 1 (Rainwater).'
+                : 'Rainwater volume is depleted. When irrigation is triggered, the controller will automatically engage Pump 2 (Backup water).'}
+            </p>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatRow({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div className="flex justify-between items-center" style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10 }}>
-      <span className="text-sm text-secondary">{label}</span>
-      <span className="font-mono text-sm" style={{ color, fontWeight: 600 }}>{value}</span>
     </div>
   );
 }
