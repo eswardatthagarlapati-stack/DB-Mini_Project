@@ -1,11 +1,10 @@
 // ============================================================
 // EcoRain Type Definitions
-// Source of truth: ESP8266 firmware /api/data response
+// Source of truth: ESP8266 firmware /api/status & /api/sensors
 // ============================================================
 
 /**
- * Exact JSON structure returned by ESP8266 GET /api/data
- * Do NOT rename these fields — they must match the firmware.
+ * Exact JSON structure returned by ESP8266 GET /api/data or /api/sensors
  */
 export interface EcoRainData {
   temperature: number;
@@ -25,7 +24,19 @@ export interface EcoRainData {
 }
 
 /**
- * Valid control actions supported by GET /control?action=ACTION
+ * ESP8266 Device Status structure returned by GET /api/status
+ */
+export interface Esp8266StatusResponse {
+  connected: boolean;
+  device: string;
+  ip: string;
+  uptime: number;
+  mode: 'automatic' | 'manual';
+  firmwareVersion?: string;
+}
+
+/**
+ * Valid control actions supported by ESP8266
  */
 export type ControlAction =
   | 'auto'
@@ -44,6 +55,23 @@ export type ConnectionStatus =
   | 'connecting'
   | 'offline'
   | 'demo';
+
+/**
+ * System Settings Configuration
+ */
+export interface SystemConfig {
+  esp8266Ip: string;
+  autoModeDefault: boolean;
+  pollingIntervalMs: number;
+  apiTimeoutMs: number;
+  soilDryThreshold: number;       // % below which irrigation triggers
+  soilMoistThreshold: number;     // % at which irrigation stops
+  temperatureThreshold: number;   // °C high temperature alert
+  humidityThreshold: number;      // % low humidity alert
+  tankHeightCm: number;           // Total tank height
+  sensorOffsetCm: number;         // HC-SR04 mount offset
+  minimumUsableLevelPct: number;  // Low water cutoff %
+}
 
 /**
  * A single entry in the frontend activity log
@@ -94,7 +122,7 @@ export interface DeviceHealthStatus {
 }
 
 /**
- * Stub for future weather integration
+ * Weather Forecast Data Stub
  */
 export interface WeatherData {
   rainProbability: number | null;
@@ -111,3 +139,4 @@ export interface SessionStats {
   pump2OnSeconds: number;
   irrigationSessions: number;
 }
+

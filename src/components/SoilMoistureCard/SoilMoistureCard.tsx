@@ -3,7 +3,6 @@ import {
   SOIL_DRY_THRESHOLD,
   SOIL_MOIST_THRESHOLD,
 } from '../../config/deviceConfig';
-import { soilStatus } from '../../utils/formatters';
 
 interface SoilMoistureCardProps {
   soilMoisture: number | null;
@@ -18,9 +17,9 @@ function CircularGauge({ pct, size = 110, stroke = 9 }: { pct: number | null; si
 
   const color =
     pct === null ? 'var(--text-dim)' :
-    pct < SOIL_DRY_THRESHOLD ? 'var(--red-400)' :
-    pct < SOIL_MOIST_THRESHOLD ? 'var(--amber-400)' :
-    'var(--green-400)';
+    pct < SOIL_DRY_THRESHOLD ? '#f87171' :
+    pct < SOIL_MOIST_THRESHOLD ? '#fbbf24' :
+    '#4ade80';
 
   return (
     <div className="soil-gauge-wrap" style={{ width: size, height: size }}>
@@ -45,7 +44,7 @@ function CircularGauge({ pct, size = 110, stroke = 9 }: { pct: number | null; si
             strokeDashoffset={offset}
             strokeLinecap="round"
             transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            style={{ transition: 'stroke-dashoffset 0.8s ease, stroke 0.3s ease' }}
+            style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.3s ease' }}
           />
         )}
       </svg>
@@ -53,29 +52,60 @@ function CircularGauge({ pct, size = 110, stroke = 9 }: { pct: number | null; si
         <span className="soil-gauge-val" style={{ color }}>
           {pct !== null ? Math.round(pct) : '—'}
         </span>
-        <span className="soil-gauge-unit">% MOISTURE</span>
+        <span className="soil-gauge-unit">% SOIL</span>
       </div>
     </div>
   );
 }
 
 export function SoilMoistureCard({ soilMoisture }: SoilMoistureCardProps) {
-  const status = soilMoisture !== null
-    ? soilStatus(soilMoisture, SOIL_DRY_THRESHOLD, SOIL_MOIST_THRESHOLD)
-    : null;
+  const statusInfo = (() => {
+    if (soilMoisture === null) return null;
+    if (soilMoisture < SOIL_DRY_THRESHOLD) {
+      return {
+        label: 'DRY',
+        desc: 'Needs Irrigation',
+        color: 'var(--red-400)',
+        bg: 'rgba(239, 68, 68, 0.15)',
+        border: 'rgba(239, 68, 68, 0.35)',
+      };
+    }
+    if (soilMoisture < SOIL_MOIST_THRESHOLD) {
+      return {
+        label: 'NORMAL',
+        desc: 'Adequate Moisture',
+        color: 'var(--amber-400)',
+        bg: 'rgba(245, 158, 11, 0.15)',
+        border: 'rgba(245, 158, 11, 0.35)',
+      };
+    }
+    return {
+      label: 'MOIST',
+      desc: 'Optimal Saturated',
+      color: 'var(--green-400)',
+      bg: 'rgba(34, 197, 94, 0.15)',
+      border: 'rgba(34, 197, 94, 0.35)',
+    };
+  })();
 
   return (
-    <div className="card" role="region" aria-label="Soil Moisture Status">
+    <div
+      className="card"
+      style={{ borderTop: '3px solid #22c55e' }}
+      role="region"
+      aria-label="Soil Moisture Status"
+    >
       <div className="card-header">
         <div className="card-title-group">
-          <h2 className="card-title">Soil Moisture</h2>
+          <h2 className="card-title">SOIL MOISTURE</h2>
           <span className="card-subtitle">Capacitive Sensor · Pin A0</span>
         </div>
         <div
           className="card-icon-badge"
           style={{
-            color: status ? status.color : 'var(--green-400)',
-            background: status ? `${status.color}15` : undefined,
+            color: 'var(--green-400)',
+            background: 'rgba(34, 197, 94, 0.15)',
+            border: '1px solid rgba(34, 197, 94, 0.3)',
           }}
         >
           <Sprout size={18} />
@@ -86,35 +116,44 @@ export function SoilMoistureCard({ soilMoisture }: SoilMoistureCardProps) {
         <CircularGauge pct={soilMoisture} />
 
         <div className="soil-info-col">
-          {status && (
+          {statusInfo ? (
             <div
-              className="soil-badge"
+              className="soil-badge font-mono"
               style={{
-                color: status.color,
-                background: `${status.color}14`,
-                border: `1px solid ${status.color}35`,
+                color: statusInfo.color,
+                background: statusInfo.bg,
+                border: `1px solid ${statusInfo.border}`,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                borderRadius: 'var(--radius-sm)',
+                fontWeight: 700,
+                fontSize: '0.8rem',
               }}
             >
-              <span className="status-dot" style={{ background: status.color }} />
-              <span>{status.label}</span>
+              <span className="status-dot" style={{ background: statusInfo.color }} />
+              <span>STATUS: {statusInfo.label}</span>
             </div>
+          ) : (
+            <span className="text-xs text-muted">Waiting for sensor…</span>
           )}
 
           <div className="threshold-bars">
             <div className="threshold-row">
               <span className="threshold-dot" style={{ background: 'var(--red-400)' }} />
               <span className="threshold-range" style={{ color: 'var(--red-400)' }}>&lt; {SOIL_DRY_THRESHOLD}%</span>
-              <span className="threshold-desc">Dry (Triggers Irrigation)</span>
+              <span className="threshold-desc">DRY (Triggers Irrigation)</span>
             </div>
             <div className="threshold-row">
               <span className="threshold-dot" style={{ background: 'var(--amber-400)' }} />
               <span className="threshold-range" style={{ color: 'var(--amber-400)' }}>{SOIL_DRY_THRESHOLD}–{SOIL_MOIST_THRESHOLD - 1}%</span>
-              <span className="threshold-desc">Irrigation Zone</span>
+              <span className="threshold-desc">NORMAL (Zone)</span>
             </div>
             <div className="threshold-row">
               <span className="threshold-dot" style={{ background: 'var(--green-400)' }} />
               <span className="threshold-range" style={{ color: 'var(--green-400)' }}>≥ {SOIL_MOIST_THRESHOLD}%</span>
-              <span className="threshold-desc">Moist (Irrigation Stops)</span>
+              <span className="threshold-desc">MOIST (Irrigation Stops)</span>
             </div>
           </div>
         </div>

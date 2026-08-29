@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Settings, Wifi, WifiOff, Trash2, Cpu, Sliders, Palette, CheckCircle2 } from 'lucide-react';
-import { getEsp8266Ip, setEsp8266Ip, clearEsp8266Ip, SOIL_DRY_THRESHOLD, SOIL_MOIST_THRESHOLD, TANK_LOW_THRESHOLD, POLLING_INTERVAL_MS } from '../config/deviceConfig';
+import { Settings, Wifi, WifiOff, Trash2, Cpu, Sliders, Palette, CheckCircle2, Cylinder, AlertCircle, Save } from 'lucide-react';
+import { getSystemConfig, saveSystemConfig, clearEsp8266Ip } from '../config/deviceConfig';
 import { testConnection } from '../services/esp8266Service';
+import { isValidIPv4, sanitizeIpInput } from '../utils/validation';
 
 interface SettingsPageProps {
   onModeChange: () => void;
@@ -10,18 +11,60 @@ interface SettingsPageProps {
 type TestState = 'idle' | 'testing' | 'success' | 'fail';
 
 export function SettingsPage({ onModeChange }: SettingsPageProps) {
-  const [ip, setIp] = useState(getEsp8266Ip());
+  const currentConfig = getSystemConfig();
+
+  // Form states
+  const [ip, setIp] = useState(currentConfig.esp8266Ip);
+  const [autoModeDefault, setAutoModeDefault] = useState(currentConfig.autoModeDefault);
+  const [pollingIntervalMs, setPollingIntervalMs] = useState(currentConfig.pollingIntervalMs);
+  const [soilDryThreshold, setSoilDryThreshold] = useState(currentConfig.soilDryThreshold);
+  const [soilMoistThreshold, setSoilMoistThreshold] = useState(currentConfig.soilMoistThreshold);
+  const [temperatureThreshold, setTemperatureThreshold] = useState(currentConfig.temperatureThreshold);
+  const [humidityThreshold, setHumidityThreshold] = useState(currentConfig.humidityThreshold);
+  const [tankHeightCm, setTankHeightCm] = useState(currentConfig.tankHeightCm);
+  const [sensorOffsetCm, setSensorOffsetCm] = useState(currentConfig.sensorOffsetCm);
+  const [minimumUsableLevelPct, setMinimumUsableLevelPct] = useState(currentConfig.minimumUsableLevelPct);
+
   const [testState, setTestState] = useState<TestState>('idle');
   const [saved, setSaved] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  function handleSave() {
-    if (ip.trim()) {
-      setEsp8266Ip(ip.trim());
-    } else {
-      clearEsp8266Ip();
+  function handleSaveAll() {
+    setValidationError(null);
+
+    // Validate IP if provided
+    const cleanIp = sanitizeIpInput(ip);
+    if (cleanIp && !isValidIPv4(cleanIp)) {
+      setValidationError('Invalid IPv4 address format (e.g. 192.168.1.100)');
+      return;
     }
+
+    // Validate thresholds
+    if (soilDryThreshold >= soilMoistThreshold) {
+      setValidationError('Soil Dry threshold must be strictly less than Soil Moist target (hysteresis requirement)');
+      return;
+    }
+
+    if (tankHeightCm <= sensorOffsetCm) {
+      setValidationError('Tank total height must be greater than sensor offset');
+      return;
+    }
+
+    saveSystemConfig({
+      esp8266Ip: cleanIp,
+      autoModeDefault,
+      pollingIntervalMs: Number(pollingIntervalMs),
+      soilDryThreshold: Number(soilDryThreshold),
+      soilMoistThreshold: Number(soilMoistThreshold),
+      temperatureThreshold: Number(temperatureThreshold),
+      humidityThreshold: Number(humidityThreshold),
+      tankHeightCm: Number(tankHeightCm),
+      sensorOffsetCm: Number(sensorOffsetCm),
+      minimumUsableLevelPct: Number(minimumUsableLevelPct),
+    });
+
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setTimeout(() => setSaved(false), 2500);
     onModeChange();
   }
 
@@ -32,8 +75,9 @@ export function SettingsPage({ onModeChange }: SettingsPageProps) {
   }
 
   async function handleTest() {
-    if (!ip.trim()) return;
-    setEsp8266Ip(ip.trim());
+    const cleanIp = sanitizeIpInput(ip);
+    if (!cleanIp) return;
+    saveSystemConfig({ esp8266Ip: cleanIp });
     setTestState('testing');
     const ok = await testConnection();
     setTestState(ok ? 'success' : 'fail');
@@ -41,208 +85,253 @@ export function SettingsPage({ onModeChange }: SettingsPageProps) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 760 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 800 }}>
       {/* Page Header */}
-      <div>
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Settings size={20} color="var(--water-400)" />
-          System & Hardware Configuration
-        </h1>
-        <p className="text-xs text-muted mt-1">
-          Network connectivity parameters, irrigation firmware thresholds, and UI telemetry preferences.
-        </p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: '1.35rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Settings size={22} color="var(--water-400)" />
+            SYSTEM CONFIGURATION & SETTINGS
+          </h1>
+          <p className="text-xs text-muted mt-1">
+            Network endpoint, autonomous irrigation thresholds, and ultrasonic tank geometry parameters.
+          </p>
+        </div>
+
+        <button className="btn btn-primary" onClick={handleSaveAll} id="btn-save-all-settings">
+          {saved ? <><CheckCircle2 size={16} /> Configuration Saved</> : <><Save size={16} /> Save All Settings</>}
+        </button>
       </div>
 
-      {/* ─── Device Connection Section ───────────────────────────── */}
-      <div className="card">
+      {validationError && (
+        <div className="ip-error-text" role="alert">
+          <AlertCircle size={15} />
+          <span>{validationError}</span>
+        </div>
+      )}
+
+      {/* ─── SECTION 1: DEVICE NETWORK ───────────────────────────── */}
+      <div className="card" style={{ borderTop: '3px solid #38bdf8' }}>
         <div className="card-header">
           <div className="card-title-group">
-            <h2 className="card-title">ESP8266 Microcontroller Network</h2>
-            <span className="card-subtitle">Target IP address on local Wi-Fi subnet</span>
+            <h2 className="card-title">1. DEVICE NETWORK (ESP8266 IP)</h2>
+            <span className="card-subtitle">Direct HTTP API routing on local Wi-Fi subnet</span>
           </div>
-          <div className="card-icon-badge">
+          <div className="card-icon-badge" style={{ color: 'var(--water-400)' }}>
             <Cpu size={18} />
           </div>
         </div>
 
-        <p className="text-xs text-secondary mb-4">
-          Enter the IPv4 address assigned to your ESP8266 by the local router. The dashboard will communicate directly with
-          <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--water-300)', margin: '0 4px', background: 'var(--bg-surface)', padding: '2px 4px', borderRadius: 4 }}>
-            http://&lt;IP&gt;/api/data
-          </code>
-          and send control signals to
-          <code style={{ fontFamily: 'var(--font-mono)', color: 'var(--water-300)', margin: '0 4px', background: 'var(--bg-surface)', padding: '2px 4px', borderRadius: 4 }}>
-            http://&lt;IP&gt;/control
-          </code>.
-        </p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-          <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }} htmlFor="input-esp8266-ip">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)' }} htmlFor="input-esp8266-ip-settings">
             ESP8266 IPv4 Address
           </label>
-          <input
-            id="input-esp8266-ip"
-            type="text"
-            placeholder="e.g. 192.168.1.100"
-            value={ip}
-            onChange={e => setIp(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSave()}
-            style={{
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-card)',
-              borderRadius: 'var(--radius-md)',
-              padding: '10px 14px',
-              color: 'var(--text-primary)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.88rem',
-              outline: 'none',
-              maxWidth: 320,
-            }}
-          />
-          <span className="text-xs text-muted">
-            Leave blank to engage the internal simulation engine for offline presentations.
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button
-            className="btn btn-primary"
-            onClick={handleSave}
-            id="btn-save-ip"
-          >
-            {saved ? <><CheckCircle2 size={15} /> Saved</> : 'Save & Connect'}
-          </button>
-
-          <button
-            className="btn btn-ghost"
-            onClick={handleTest}
-            disabled={!ip.trim() || testState === 'testing'}
-            id="btn-test-connection"
-          >
-            {testState === 'testing' ? (
-              <span>Testing Ping…</span>
-            ) : (
-              <><Wifi size={15} /> Ping /api/data</>
-            )}
-          </button>
-
-          {getEsp8266Ip() && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <input
+              id="input-esp8266-ip-settings"
+              type="text"
+              placeholder="e.g. 192.168.1.100"
+              value={ip}
+              onChange={(e) => setIp(e.target.value)}
+              className="ip-input-field"
+              style={{ maxWidth: 320 }}
+            />
             <button
               className="btn btn-ghost"
-              onClick={handleClear}
-              id="btn-clear-ip"
-              style={{ color: 'var(--red-400)' }}
+              onClick={handleTest}
+              disabled={!ip.trim() || testState === 'testing'}
+              id="btn-test-ping"
             >
-              <Trash2 size={15} /> Disconnect (Simulation Mode)
+              {testState === 'testing' ? <span>Pinging…</span> : <><Wifi size={14} /> Ping Controller</>}
             </button>
-          )}
+            {currentConfig.esp8266Ip && (
+              <button
+                className="btn btn-ghost"
+                onClick={handleClear}
+                style={{ color: 'var(--red-400)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+              >
+                <Trash2 size={14} /> Disconnect
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Test Result Message */}
         {testState === 'success' && (
-          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--green-400)', fontSize: '0.82rem', fontWeight: 600 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--green-400)', fontSize: '0.82rem', fontWeight: 600 }}>
             <Wifi size={15} /> Controller reachable — /api/data responded successfully
           </div>
         )}
         {testState === 'fail' && (
-          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red-400)', fontSize: '0.82rem', fontWeight: 600 }}>
-            <WifiOff size={15} /> Unable to reach controller at {ip}. Verify Wi-Fi connectivity.
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red-400)', fontSize: '0.82rem', fontWeight: 600 }}>
+            <WifiOff size={15} /> Unable to reach controller at {ip}. Verify same Wi-Fi subnet and CORS.
           </div>
         )}
       </div>
 
-      {/* ─── Irrigation Firmware Thresholds ──────────────────────── */}
-      <div className="card">
+      {/* ─── SECTION 2: IRRIGATION THRESHOLDS ─────────────────────── */}
+      <div className="card" style={{ borderTop: '3px solid #22c55e' }}>
         <div className="card-header">
           <div className="card-title-group">
-            <h2 className="card-title">Irrigation Logic Thresholds</h2>
-            <span className="card-subtitle">Autonomous firmware switching parameters</span>
+            <h2 className="card-title">2. IRRIGATION THRESHOLDS</h2>
+            <span className="card-subtitle">Autonomous soil moisture trigger & cutoff parameters</span>
           </div>
-          <div className="card-icon-badge">
+          <div className="card-icon-badge" style={{ color: 'var(--green-400)' }}>
             <Sliders size={18} />
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-          <div style={{ background: 'var(--bg-surface)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Soil Dry Threshold
-            </div>
-            <div className="font-mono" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--red-400)', marginTop: 4 }}>
-              &lt; {SOIL_DRY_THRESHOLD}%
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-              Triggers automatic pump activation.
-            </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+          {/* Soil Dry */}
+          <div className="form-field-group">
+            <label className="form-field-label">Soil Dry Threshold (%)</label>
+            <input
+              type="number"
+              min={5}
+              max={90}
+              value={soilDryThreshold}
+              onChange={(e) => setSoilDryThreshold(Number(e.target.value))}
+              className="form-number-input"
+            />
+            <span className="text-xs text-muted">Below this %, system flags irrigation required.</span>
           </div>
 
-          <div style={{ background: 'var(--bg-surface)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Soil Moist Target
-            </div>
-            <div className="font-mono" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--green-400)', marginTop: 4 }}>
-              ≥ {SOIL_MOIST_THRESHOLD}%
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-              Hysteresis cutoff stopping irrigation.
-            </div>
+          {/* Soil Moist Target */}
+          <div className="form-field-group">
+            <label className="form-field-label">Soil Moist Target (%)</label>
+            <input
+              type="number"
+              min={10}
+              max={95}
+              value={soilMoistThreshold}
+              onChange={(e) => setSoilMoistThreshold(Number(e.target.value))}
+              className="form-number-input"
+            />
+            <span className="text-xs text-muted">At or above this %, system turns off pumps (hysteresis).</span>
           </div>
 
-          <div style={{ background: 'var(--bg-surface)', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Tank Low Threshold
-            </div>
-            <div className="font-mono" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--amber-400)', marginTop: 4 }}>
-              ≤ {TANK_LOW_THRESHOLD}%
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-              Switches source from Pump 1 to Pump 2.
-            </div>
+          {/* Temp High Alert */}
+          <div className="form-field-group">
+            <label className="form-field-label">Temperature Alert (°C)</label>
+            <input
+              type="number"
+              min={20}
+              max={60}
+              value={temperatureThreshold}
+              onChange={(e) => setTemperatureThreshold(Number(e.target.value))}
+              className="form-number-input"
+            />
+            <span className="text-xs text-muted">Triggers high-temperature warning badge.</span>
+          </div>
+
+          {/* Humidity Low Alert */}
+          <div className="form-field-group">
+            <label className="form-field-label">Dry Air Humidity (%)</label>
+            <input
+              type="number"
+              min={10}
+              max={60}
+              value={humidityThreshold}
+              onChange={(e) => setHumidityThreshold(Number(e.target.value))}
+              className="form-number-input"
+            />
+            <span className="text-xs text-muted">Flags dry ambient air conditions.</span>
           </div>
         </div>
       </div>
 
-      {/* ─── Telemetry & Display Parameters ──────────────────────── */}
-      <div className="card">
+      {/* ─── SECTION 3: TANK GEOMETRY & CAPACITY ──────────────────── */}
+      <div className="card" style={{ borderTop: '3px solid #0ea5e9' }}>
         <div className="card-header">
           <div className="card-title-group">
-            <h2 className="card-title">Telemetry & Polling Engine</h2>
-            <span className="card-subtitle">Client-side refresh timings & UI configuration</span>
+            <h2 className="card-title">3. TANK GEOMETRY & CAPACITIES</h2>
+            <span className="card-subtitle">Ultrasonic calibration dimensions & backup switchover level</span>
           </div>
-          <div className="card-icon-badge">
+          <div className="card-icon-badge" style={{ color: 'var(--water-400)' }}>
+            <Cylinder size={18} />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+          <div className="form-field-group">
+            <label className="form-field-label">Tank Total Height (cm)</label>
+            <input
+              type="number"
+              min={10}
+              max={500}
+              value={tankHeightCm}
+              onChange={(e) => setTankHeightCm(Number(e.target.value))}
+              className="form-number-input"
+            />
+            <span className="text-xs text-muted">Physical depth of the rainwater storage tank.</span>
+          </div>
+
+          <div className="form-field-group">
+            <label className="form-field-label">Sensor Offset / Margin (cm)</label>
+            <input
+              type="number"
+              min={0}
+              max={50}
+              value={sensorOffsetCm}
+              onChange={(e) => setSensorOffsetCm(Number(e.target.value))}
+              className="form-number-input"
+            />
+            <span className="text-xs text-muted">Distance from HC-SR04 face to 100% full waterline.</span>
+          </div>
+
+          <div className="form-field-group">
+            <label className="form-field-label">Minimum Usable Level (%)</label>
+            <input
+              type="number"
+              min={5}
+              max={50}
+              value={minimumUsableLevelPct}
+              onChange={(e) => setMinimumUsableLevelPct(Number(e.target.value))}
+              className="form-number-input"
+            />
+            <span className="text-xs text-muted">Switchover threshold from Pump 1 to Pump 2 (Backup).</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── SECTION 4: SYSTEM & TELEMETRY ────────────────────────── */}
+      <div className="card" style={{ borderTop: '3px solid #a855f7' }}>
+        <div className="card-header">
+          <div className="card-title-group">
+            <h2 className="card-title">4. SYSTEM & POLLING ENGINE</h2>
+            <span className="card-subtitle">Default startup mode and background telemetry rate</span>
+          </div>
+          <div className="card-icon-badge" style={{ color: '#c084fc' }}>
             <Palette size={18} />
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-            <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>Polling Rate</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Interval between background HTTP GET /api/data requests</div>
-            </div>
-            <span className="font-mono text-sm" style={{ fontWeight: 600, color: 'var(--water-300)' }}>
-              {POLLING_INTERVAL_MS} ms (2.0s)
-            </span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+          <div className="form-field-group">
+            <label className="form-field-label">Telemetry Polling Rate</label>
+            <select
+              value={pollingIntervalMs}
+              onChange={(e) => setPollingIntervalMs(Number(e.target.value))}
+              className="form-select-input"
+            >
+              <option value={1000}>1.0 second (High Frequency)</option>
+              <option value={2000}>2.0 seconds (Recommended Standard)</option>
+              <option value={5000}>5.0 seconds (Low Bandwidth)</option>
+              <option value={10000}>10.0 seconds (Power Saver)</option>
+            </select>
+            <span className="text-xs text-muted">Interval between GET /api/data requests.</span>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-            <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>Visual Interface Theme</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>High-contrast dark IoT monitoring palette</div>
-            </div>
-            <span className="font-mono text-sm text-secondary">
-              EcoRain Deep Navy
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
-            <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>Simulation Engine</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Active when no physical ESP8266 IP address is bound</div>
-            </div>
-            <span className="font-mono text-sm" style={{ color: getEsp8266Ip() ? 'var(--text-muted)' : 'var(--water-400)' }}>
-              {getEsp8266Ip() ? 'Inactive (Hardware Bound)' : 'Ready / Active'}
-            </span>
+          <div className="form-field-group">
+            <label className="form-field-label">Default Operating Mode</label>
+            <select
+              value={autoModeDefault ? 'auto' : 'manual'}
+              onChange={(e) => setAutoModeDefault(e.target.value === 'auto')}
+              className="form-select-input"
+            >
+              <option value="auto">Automatic Irrigation (Default)</option>
+              <option value="manual">Manual Control Mode</option>
+            </select>
+            <span className="text-xs text-muted">Initial mode selected on startup.</span>
           </div>
         </div>
       </div>

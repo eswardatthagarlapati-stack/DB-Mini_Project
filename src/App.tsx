@@ -5,12 +5,13 @@ import { Header } from './components/Header/Header';
 import { MobileNav } from './components/Navigation/MobileNav';
 import { Dashboard } from './pages/Dashboard';
 import { Analytics } from './pages/Analytics';
-import { Diagnostics } from './pages/Diagnostics';
+import { HardwareDocs } from './pages/HardwareDocs';
 import { SettingsPage } from './pages/Settings';
+import { DemoControlsModal } from './components/DemoControls/DemoControlsModal';
 import type { ControlAction } from './types/ecoRain';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
-type Page = 'dashboard' | 'analytics' | 'diagnostics' | 'settings';
+type Page = 'dashboard' | 'analytics' | 'hardware' | 'settings';
 
 interface Toast {
   id: string;
@@ -20,14 +21,15 @@ interface Toast {
 
 export default function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard');
+  const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const { state, sendCommand, refreshMode, sessionStats } = useEcoRain();
 
   const showToast = useCallback((type: 'success' | 'error', message: string) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setToasts(prev => [...prev.slice(-2), { id, type, message }]);
+    setToasts((prev) => [...prev.slice(-2), { id, type, message }]);
     setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
+      setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3500);
   }, []);
 
@@ -39,9 +41,9 @@ export default function App() {
         manual: 'Manual control mode enabled',
         pump1_on: 'Pump 1 (Rainwater) activated',
         pump1_off: 'Pump 1 (Rainwater) deactivated',
-        pump2_on: 'Pump 2 (Backup water) activated',
-        pump2_off: 'Pump 2 (Backup water) deactivated',
-        all_off: 'Emergency stop signal sent — all pumps halted',
+        pump2_on: 'Pump 2 (Normal backup water) activated',
+        pump2_off: 'Pump 2 (Normal backup water) deactivated',
+        all_off: 'Emergency stop signal confirmed — all pumps halted',
       };
       if (ok) {
         showToast('success', actionNames[action] || 'Command dispatched successfully');
@@ -65,7 +67,11 @@ export default function App() {
         lastUpdated={state.lastUpdated}
         apiResponseMs={state.apiResponseMs}
         activePage={activePage}
-        onNavigate={page => setActivePage(page as Page)}
+        onNavigate={(page) => setActivePage(page as Page)}
+        onOpenConnectModal={() => {
+          setActivePage('settings');
+        }}
+        onOpenDemoModal={() => setIsDemoModalOpen(true)}
       />
 
       <main className="page-content" id="main-content" tabIndex={-1}>
@@ -75,39 +81,44 @@ export default function App() {
             connectionStatus={state.connectionStatus}
             isLoading={state.isLoading}
             error={state.error}
+            lastUpdated={state.lastUpdated}
+            apiResponseMs={state.apiResponseMs}
             sessionStats={sessionStats}
             history={state.history}
             activityLog={state.activityLog}
             onCommand={handleCommand}
+            onIpChanged={() => refreshMode()}
+            onOpenDemoControls={() => setIsDemoModalOpen(true)}
           />
         )}
         {activePage === 'analytics' && (
           <Analytics history={state.history} />
         )}
-        {activePage === 'diagnostics' && (
-          <Diagnostics
-            data={state.data}
-            connectionStatus={state.connectionStatus}
-            lastUpdated={state.lastUpdated}
-            apiResponseMs={state.apiResponseMs}
-            isDemoMode={state.isDemoMode}
-          />
+        {activePage === 'hardware' && (
+          <HardwareDocs />
         )}
         {activePage === 'settings' && (
           <SettingsPage onModeChange={handleModeChange} />
         )}
       </main>
 
+      {/* Interactive Demonstration Simulator Modal */}
+      <DemoControlsModal
+        isOpen={isDemoModalOpen}
+        onClose={() => setIsDemoModalOpen(false)}
+        onRefresh={() => refreshMode()}
+      />
+
       {/* Mobile Bottom Navigation */}
       <MobileNav
         activePage={activePage}
-        onNavigate={page => setActivePage(page as Page)}
+        onNavigate={(page) => setActivePage(page as Page)}
       />
 
       {/* Toast Notification Shelf */}
       {toasts.length > 0 && (
         <div className="toast-shelf" role="status" aria-live="polite">
-          {toasts.map(t => (
+          {toasts.map((t) => (
             <div key={t.id} className="toast-item">
               {t.type === 'success' ? (
                 <CheckCircle2 size={16} color="var(--green-400)" style={{ flexShrink: 0 }} />

@@ -1,7 +1,7 @@
 // ============================================================
 // Simulation Service
-// Realistic demo mode — physically plausible sensor behaviour.
-// Does NOT generate random values on every tick.
+// Realistic demo mode — physically plausible sensor behaviour
+// with interactive simulation controls for demonstrations/viva.
 // ============================================================
 
 import type { ControlAction, EcoRainData } from '../types/ecoRain';
@@ -25,20 +25,22 @@ interface SimState {
   uptimeStart: number;      // ms epoch
   tempDir: 1 | -1;
   humDir: 1 | -1;
+  manualOverride: boolean;
 }
 
 let state: SimState = {
-  temperature: 27.5,
-  humidity: 62,
-  soilMoisture: 68,
+  temperature: 29.5,
+  humidity: 65.2,
+  soilMoisture: 42,
   waterLevel: 78,
   pump1: false,
   pump2: false,
   autoMode: true,
   irrigationRequired: false,
-  uptimeStart: Date.now() - 125_000,
+  uptimeStart: Date.now() - 340_000,
   tempDir: 1,
   humDir: -1,
+  manualOverride: false,
 };
 
 // ─── Tick — called each polling interval ────────────────────
@@ -51,8 +53,8 @@ function drift(value: number, dir: 1 | -1, min: number, max: number, step: numbe
 }
 
 export function tickSimulation(): void {
-  // Temperature: 22 – 34 °C
-  const t = drift(state.temperature, state.tempDir, 22, 34, 0.08);
+  // Temperature: 22 – 35 °C
+  const t = drift(state.temperature, state.tempDir, 22, 35, 0.08);
   state.temperature = t.value;
   state.tempDir = t.dir;
 
@@ -63,14 +65,14 @@ export function tickSimulation(): void {
 
   // Soil moisture dynamics
   if (state.pump1 || state.pump2) {
-    // Irrigation: soil rises
-    state.soilMoisture = Math.min(85, state.soilMoisture + 0.6);
+    // Irrigation active: soil moisture rises
+    state.soilMoisture = Math.min(88, state.soilMoisture + 0.7);
   } else if (state.irrigationRequired) {
-    // Waiting for pump — soil still dry
-    state.soilMoisture = Math.max(25, state.soilMoisture - 0.05);
+    // Waiting for pump — soil stays dry
+    state.soilMoisture = Math.max(22, state.soilMoisture - 0.05);
   } else {
     // Normal evaporation
-    state.soilMoisture = Math.max(0, state.soilMoisture - 0.18);
+    state.soilMoisture = Math.max(0, state.soilMoisture - 0.16);
   }
   state.soilMoisture = Math.round(state.soilMoisture * 10) / 10;
 
@@ -99,14 +101,43 @@ export function tickSimulation(): void {
 
   // Tank depletion (pump1 draws from tank)
   if (state.pump1) {
-    state.waterLevel = Math.max(0, state.waterLevel - 0.15);
+    state.waterLevel = Math.max(0, state.waterLevel - 0.18);
     state.waterLevel = Math.round(state.waterLevel * 10) / 10;
   }
-  // Slow natural refill
+  // Slow natural refill when idle
   if (!state.pump1 && state.waterLevel < 95) {
-    state.waterLevel = Math.min(95, state.waterLevel + 0.01);
+    state.waterLevel = Math.min(95, state.waterLevel + 0.015);
     state.waterLevel = Math.round(state.waterLevel * 10) / 10;
   }
+}
+
+// ─── Manual Simulation Preset Setters ───────────────────────
+
+export function setSimSoilMoisture(pct: number): void {
+  state.soilMoisture = Math.max(0, Math.min(100, pct));
+  if (state.soilMoisture < SOIL_DRY_THRESHOLD) {
+    state.irrigationRequired = true;
+  } else if (state.soilMoisture >= SOIL_MOIST_THRESHOLD) {
+    state.irrigationRequired = false;
+  }
+}
+
+export function setSimTankLevel(pct: number): void {
+  state.waterLevel = Math.max(0, Math.min(100, pct));
+}
+
+export function setSimTemperature(temp: number): void {
+  state.temperature = Math.max(10, Math.min(50, temp));
+}
+
+export function setSimHumidity(hum: number): void {
+  state.humidity = Math.max(10, Math.min(100, hum));
+}
+
+export function simulateRainEvent(): void {
+  state.waterLevel = Math.min(100, state.waterLevel + 35);
+  state.humidity = Math.min(95, state.humidity + 20);
+  state.soilMoisture = Math.min(90, state.soilMoisture + 15);
 }
 
 // ─── Apply a control command to the simulated state ─────────
@@ -153,12 +184,13 @@ export function getSimulatedData(): { data: EcoRainData; responseMs: number } {
   const uptimeSeconds = Math.floor((Date.now() - state.uptimeStart) / 1000);
 
   // Derive distance from waterLevel (tank height = 30 cm)
-  // waterLevel 100% → distance 2 cm (nearly full)
+  // waterLevel 100% → distance 2.0 cm (full)
+  // waterLevel 78%  → distance 8.5 cm
   // waterLevel 0%   → distance 30 cm (empty)
   const distance = Math.round((2 + (100 - state.waterLevel) * 0.28) * 10) / 10;
 
-  // Soil raw ADC: inversely proportional to moisture (dry = high ADC)
-  const soilRaw = Math.round(1023 - (state.soilMoisture / 100) * 950);
+  // Soil raw ADC: inversely proportional to moisture (dry = high ADC 900-1023, moist = 300)
+  const soilRaw = Math.round(1023 - (state.soilMoisture / 100) * 800);
 
   const data: EcoRainData = {
     temperature: state.temperature,
@@ -174,16 +206,5 @@ export function getSimulatedData(): { data: EcoRainData; responseMs: number } {
     uptime: uptimeSeconds,
   };
 
-  return { data, responseMs: Math.floor(Math.random() * 5 + 1) };
-}
-
-// ─── Weather Service Stub ────────────────────────────────────
-// (kept here for future expansion)
-export function getWeatherStub() {
-  return {
-    rainProbability: null,
-    forecast: null,
-    forecastTemperature: null,
-    rainExpected: null,
-  };
+  return { data, responseMs: Math.floor(Math.random() * 4 + 1) };
 }

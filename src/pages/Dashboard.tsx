@@ -1,9 +1,10 @@
-import { Thermometer, Droplets, Ruler, RefreshCw, Activity } from 'lucide-react';
-import type { ControlAction, EcoRainData, ConnectionStatus } from '../types/ecoRain';
-import type { SessionStats, HistoryPoint, ActivityEntry } from '../types/ecoRain';
+import { Thermometer, Droplets, Ruler, Info } from 'lucide-react';
+import type { ControlAction, EcoRainData, ConnectionStatus, SessionStats, HistoryPoint, ActivityEntry } from '../types/ecoRain';
+import { DeviceConnectionCard } from '../components/DeviceConnection/DeviceConnectionCard';
 import { SensorCard } from '../components/SensorCard/SensorCard';
 import { SoilMoistureCard } from '../components/SoilMoistureCard/SoilMoistureCard';
 import { TankVisualization } from '../components/TankVisualization/TankVisualization';
+import { SystemStatusPanel } from '../components/SystemStatus/SystemStatusPanel';
 import { IrrigationDecision } from '../components/IrrigationDecision/IrrigationDecision';
 import { SystemControl } from '../components/SystemControl/SystemControl';
 import { PumpCard } from '../components/PumpCard/PumpCard';
@@ -11,124 +12,124 @@ import { SensorCharts } from '../components/SensorCharts/SensorCharts';
 import { WaterManagement } from '../components/WaterManagement/WaterManagement';
 import { DeviceHealth } from '../components/DeviceHealth/DeviceHealth';
 import { ActivityLog } from '../components/ActivityLog/ActivityLog';
-import { formatUptime } from '../utils/formatters';
+import { getSystemConfig } from '../config/deviceConfig';
+import { formatUptime, formatTimeSince } from '../utils/formatters';
 
 interface DashboardProps {
   data: EcoRainData | null;
   connectionStatus: ConnectionStatus;
   isLoading: boolean;
   error: string | null;
+  lastUpdated: Date | null;
+  apiResponseMs: number | null;
   sessionStats: SessionStats;
   history: HistoryPoint[];
   activityLog: ActivityEntry[];
   onCommand: (action: ControlAction) => Promise<boolean>;
+  onIpChanged: (newIp: string) => void;
+  onOpenDemoControls: () => void;
 }
 
 export function Dashboard({
-  data, connectionStatus, isLoading, error, sessionStats, history, activityLog, onCommand
+  data,
+  connectionStatus,
+  isLoading,
+  error,
+  lastUpdated,
+  apiResponseMs,
+  sessionStats,
+  history,
+  activityLog,
+  onCommand,
+  onIpChanged,
+  onOpenDemoControls,
 }: DashboardProps) {
+  const config = getSystemConfig();
   const sensorError = data ? data.distance < 0 : false;
+  const isDisconnected = connectionStatus === 'offline';
 
-  // Temperature status calculation
+  // Temperature Status
   const tempStatus = (() => {
     if (!data) return { label: 'Awaiting sensor', color: 'var(--text-muted)' };
-    if (data.temperature > 35) return { label: 'High Temp', color: 'var(--red-400)' };
+    if (data.temperature > config.temperatureThreshold) return { label: 'High Temp', color: 'var(--red-400)' };
     if (data.temperature < 15) return { label: 'Cool Temp', color: 'var(--water-400)' };
-    return { label: 'Optimal', color: 'var(--green-400)' };
+    return { label: 'Optimal Range', color: 'var(--green-400)' };
   })();
 
-  // Humidity status calculation
+  // Humidity Status
   const humidStatus = (() => {
     if (!data) return { label: 'Awaiting sensor', color: 'var(--text-muted)' };
     if (data.humidity > 80) return { label: 'High Humidity', color: 'var(--water-400)' };
-    if (data.humidity < 30) return { label: 'Dry Air', color: 'var(--amber-400)' };
-    return { label: 'Moderate', color: 'var(--green-400)' };
+    if (data.humidity < config.humidityThreshold) return { label: 'Dry Air', color: 'var(--amber-400)' };
+    return { label: 'Moderate Humid', color: 'var(--green-400)' };
   })();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-      {/* ─── Compact System Status Overview Bar ─────────────────── */}
-      <div className="system-status-bar" role="region" aria-label="System Overview">
-        <div className="status-headline">
-          <div className="card-icon-badge" style={{ color: 'var(--water-400)' }}>
-            <Activity size={18} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="status-summary-text">System Status</span>
-              {data && (
-                <span className={`status-mode-pill ${data.autoMode ? 'auto' : 'manual'}`}>
-                  ● {data.autoMode ? 'AUTO MODE' : 'MANUAL MODE'}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      {/* ─── Disconnected / Offline Banner Alert ───────────────────── */}
+      {isDisconnected && (
+        <div className="offline-banner" role="alert">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="status-dot red pulse" />
+            <div>
+              <strong>ESP8266 DISCONNECTED:</strong> Unable to retrieve live sensor data. Please check IP or Wi-Fi.
+              {lastUpdated && (
+                <span className="text-xs" style={{ display: 'block', opacity: 0.85 }}>
+                  Last successful update: {formatTimeSince(lastUpdated)}
                 </span>
               )}
             </div>
-            <div className="status-summary-sub">
-              {data?.autoMode
-                ? 'Automatic sensor-based irrigation loop running'
-                : 'Manual control active — automated irrigation disengaged'}
-            </div>
           </div>
+          {error && <span className="font-mono text-xs text-red font-semibold">{error}</span>}
         </div>
+      )}
 
-        <div className="status-stats-row">
-          {data ? (
-            <>
-              <div className="stat-item">
-                <span className="stat-label">Controller Uptime</span>
-                <span className="stat-value">{formatUptime(data.uptime)}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Active Dispatches</span>
-                <span className="stat-value" style={{ color: data.pump1 || data.pump2 ? 'var(--green-400)' : 'var(--text-muted)' }}>
-                  {data.pump1 && data.pump2 ? 'P1 + P2' : data.pump1 ? 'Pump 1 (Rain)' : data.pump2 ? 'Pump 2 (Backup)' : 'Idle'}
-                </span>
-              </div>
-            </>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              {isLoading ? (
-                <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Polling controller…</>
-              ) : (
-                <span>● Standby</span>
-              )}
-            </div>
-          )}
+      {/* ─── 1. DEVICE CONNECTION PANEL ───────────────────────────── */}
+      <DeviceConnectionCard
+        connectionStatus={connectionStatus}
+        isLoading={isLoading}
+        apiResponseMs={apiResponseMs}
+        uptime={data?.uptime ?? null}
+        onIpChanged={onIpChanged}
+        onOpenDemoControls={onOpenDemoControls}
+      />
 
-          {connectionStatus === 'offline' && error && (
-            <span style={{ fontSize: '0.78rem', color: 'var(--red-400)', fontWeight: 600 }}>
-              {error}
-            </span>
-          )}
-        </div>
-      </div>
+      {/* ─── 2. SYSTEM STATUS OVERVIEW PANEL ───────────────────────── */}
+      <SystemStatusPanel
+        data={data}
+        connectionStatus={connectionStatus}
+        lastUpdated={lastUpdated}
+        isLoading={isLoading}
+      />
 
-      {/* ─── DESKTOP PRIMARY SENSOR GRID (4 COLUMNS) ────────────────── */}
-      {/* On mobile, this transforms via CSS into prioritized order */}
+      {/* ─── 3. LIVE SENSOR CARDS (4 PRIMARY METRICS) ──────────────── */}
       <div className="desktop-sensors-section">
         <div className="section-header">
-          <span className="section-title">Telemetry & Environmental Sensors</span>
+          <span className="section-title">Live Sensor Telemetry</span>
           <div className="section-line" />
         </div>
 
         <div className="grid-4">
-          {/* Soil Moisture (Hero on Mobile & Desktop) */}
+          {/* Card 1: Soil Moisture Sensor (A0) */}
           <SoilMoistureCard
             soilMoisture={data?.soilMoisture ?? null}
             irrigationRequired={data?.irrigationRequired ?? null}
           />
 
-          {/* Temperature */}
+          {/* Card 2: Temperature Sensor (DHT22 - D4) */}
           <SensorCard
-            title="Temperature"
+            title="TEMPERATURE"
             subtitle="DHT22 Sensor · Pin D4"
             icon={<Thermometer size={18} />}
-            iconColor="var(--water-400)"
+            iconColor="#f97316"
+            gradient="orange"
             value={data?.temperature ?? null}
             unit="°C"
             unavailable={!data}
+            unavailableText="Waiting for sensor…"
             statusLabel={tempStatus.label}
             statusColor={tempStatus.color}
+            style={{ borderTop: '3px solid #f97316' }}
           >
             {data && (
               <div className="mini-progress-track">
@@ -136,24 +137,27 @@ export function Dashboard({
                   className="mini-progress-fill"
                   style={{
                     width: `${Math.max(0, Math.min(100, ((data.temperature - 10) / 35) * 100))}%`,
-                    background: data.temperature < 20 ? 'var(--water-400)' : data.temperature < 30 ? 'var(--green-400)' : 'var(--amber-400)',
+                    background: 'linear-gradient(90deg, #f97316, #fb923c)',
                   }}
                 />
               </div>
             )}
           </SensorCard>
 
-          {/* Humidity */}
+          {/* Card 3: Humidity Sensor (DHT22 - D4) */}
           <SensorCard
-            title="Humidity"
+            title="HUMIDITY"
             subtitle="DHT22 Sensor · Pin D4"
             icon={<Droplets size={18} />}
-            iconColor="var(--green-400)"
+            iconColor="#06b6d4"
+            gradient="cyan"
             value={data?.humidity ?? null}
             unit="%"
             unavailable={!data}
+            unavailableText="Waiting for sensor…"
             statusLabel={humidStatus.label}
             statusColor={humidStatus.color}
+            style={{ borderTop: '3px solid #06b6d4' }}
           >
             {data && (
               <div className="mini-progress-track">
@@ -161,32 +165,46 @@ export function Dashboard({
                   className="mini-progress-fill"
                   style={{
                     width: `${Math.max(0, Math.min(100, data.humidity))}%`,
-                    background: 'linear-gradient(90deg, #16a34a, #4ade80)',
+                    background: 'linear-gradient(90deg, #06b6d4, #38bdf8)',
                   }}
                 />
               </div>
             )}
           </SensorCard>
 
-          {/* Water Distance */}
+          {/* Card 4: Rainwater Tank Sensor (HC-SR04 - D5/D6) */}
           <SensorCard
-            title="Water Distance"
+            title="RAINWATER TANK"
             subtitle="HC-SR04 Sensor · Pins D5/D6"
             icon={<Ruler size={18} />}
-            iconColor={sensorError ? 'var(--amber-400)' : 'var(--water-300)'}
-            value={sensorError ? null : (data?.distance ?? null)}
-            unit=" cm"
+            iconColor="#0ea5e9"
+            gradient="blue"
+            value={sensorError ? null : (data?.waterLevel ?? null)}
+            unit="%"
             unavailable={!data || sensorError}
-            unavailableText="UNAVAILABLE"
-            statusLabel={sensorError ? 'HC-SR04 signal not detected' : data ? 'Distance to Surface' : 'Awaiting sensor'}
-            statusColor={sensorError ? 'var(--amber-400)' : 'var(--text-muted)'}
-          />
+            unavailableText={sensorError ? 'Sensor unavailable' : 'Waiting for sensor…'}
+            statusLabel={sensorError ? 'Echo signal timeout' : data ? `Dist: ${data.distance.toFixed(1)} cm` : 'Awaiting sensor'}
+            statusColor={sensorError ? 'var(--amber-400)' : '#38bdf8'}
+            style={{ borderTop: '3px solid #0ea5e9' }}
+          >
+            {data && !sensorError && (
+              <div className="mini-progress-track">
+                <div
+                  className="mini-progress-fill"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, data.waterLevel))}%`,
+                    background: 'linear-gradient(90deg, #0284c7, #38bdf8)',
+                  }}
+                />
+              </div>
+            )}
+          </SensorCard>
         </div>
       </div>
 
-      {/* ─── Rainwater Storage Centerpiece ─────────────────────── */}
+      {/* ─── 4. RAINWATER TANK VISUALIZATION ───────────────────────── */}
       <div className="section-header">
-        <span className="section-title">Rainwater Storage Reservoir</span>
+        <span className="section-title">Rainwater Harvesting Reservoir</span>
         <div className="section-line" />
       </div>
 
@@ -195,9 +213,9 @@ export function Dashboard({
         distance={data?.distance ?? null}
       />
 
-      {/* ─── Irrigation Intelligence & System Control ─────────── */}
+      {/* ─── 5. IRRIGATION INTELLIGENCE & SYSTEM CONTROL ───────────── */}
       <div className="section-header">
-        <span className="section-title">Decision Intelligence & Controller</span>
+        <span className="section-title">Decision Intelligence & Operational Controls</span>
         <div className="section-line" />
       </div>
 
@@ -208,6 +226,7 @@ export function Dashboard({
           pump2={data?.pump2 ?? null}
           soilMoisture={data?.soilMoisture ?? null}
           waterLevel={data?.waterLevel ?? null}
+          autoMode={data?.autoMode ?? null}
           sensorError={sensorError}
         />
         <SystemControl
@@ -217,28 +236,31 @@ export function Dashboard({
         />
       </div>
 
-      {/* ─── Pump Equipment Controls ───────────────────────────── */}
+      {/* ─── 6. PUMP 1 & PUMP 2 TELEMETRY CARDS ─────────────────────── */}
       <div className="section-header">
-        <span className="section-title">Irrigation Equipment Telemetry</span>
+        <span className="section-title">Irrigation Actuator Relays</span>
         <div className="section-line" />
       </div>
 
       <div className="grid-2">
+        {/* Pump 1: Rainwater Pump (Priority 1) */}
         <PumpCard
           pumpId={1}
-          title="Pump 1 — Rainwater"
-          sourceLabel="Rainwater Reservoir"
-          sourceDesc="Primary source (active when tank > 20%)"
+          title="PUMP 1 — RAINWATER"
+          sourceLabel="Rainwater Harvesting Tank"
+          sourceDesc="Priority 1 Source (Active when tank > 20%) · Relay Pin D1"
           isOn={data?.pump1 ?? null}
           isLoading={isLoading}
           runtimeSeconds={sessionStats.pump1OnSeconds}
           onCommand={onCommand}
         />
+
+        {/* Pump 2: Normal/Main Water Pump (Backup Priority 2) */}
         <PumpCard
           pumpId={2}
-          title="Pump 2 — Normal Backup Water"
-          sourceLabel="Mains / Backup Supply"
-          sourceDesc="Secondary source (active when tank is low)"
+          title="PUMP 2 — NORMAL WATER"
+          sourceLabel="Normal / Mains Water Tank"
+          sourceDesc="Priority 2 Backup (Active when rainwater low) · Relay Pin D2"
           isOn={data?.pump2 ?? null}
           isLoading={isLoading}
           runtimeSeconds={sessionStats.pump2OnSeconds}
@@ -246,27 +268,78 @@ export function Dashboard({
         />
       </div>
 
-      {/* ─── Live Analytics Trend Charts ───────────────────────── */}
+      {/* ─── 7. SESSION SENSOR TREND CHARTS ────────────────────────── */}
       <div className="section-header">
-        <span className="section-title">Session Telemetry Analytics</span>
+        <span className="section-title">Session Telemetry Stream</span>
         <div className="section-line" />
       </div>
 
       <SensorCharts history={history} />
 
-      {/* ─── Water Utilization Metrics ─────────────────────────── */}
+      {/* ─── 8. WATER CONSERVATION MANAGEMENT ──────────────────────── */}
       <WaterManagement sessionStats={sessionStats} />
 
-      {/* ─── Device Health & Activity Log ──────────────────────── */}
+      {/* ─── 9. SYSTEM INFORMATION & AUDIT TRAIL ───────────────────── */}
       <div className="section-header">
-        <span className="section-title">System Health & Event Audit</span>
+        <span className="section-title">System Information & Diagnostics</span>
         <div className="section-line" />
       </div>
 
       <div className="grid-2">
+        {/* System Information Card */}
+        <div className="card" style={{ borderTop: '3px solid #6366f1' }}>
+          <div className="card-header">
+            <div className="card-title-group">
+              <h2 className="card-title">SYSTEM INFORMATION</h2>
+              <span className="card-subtitle">NodeMCU ESP8266 Microcontroller Specification</span>
+            </div>
+            <div className="card-icon-badge" style={{ color: '#818cf8' }}>
+              <Info size={18} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="info-spec-row">
+              <span className="info-spec-key">Controller Hardware</span>
+              <span className="info-spec-val font-mono">NodeMCU ESP8266 (ESP-12E Module)</span>
+            </div>
+            <div className="info-spec-row">
+              <span className="info-spec-key">Firmware / API Spec</span>
+              <span className="info-spec-val font-mono text-cyan">v1.4.2 REST / JSON (CORS Enabled)</span>
+            </div>
+            <div className="info-spec-row">
+              <span className="info-spec-key">Active IP Endpoint</span>
+              <span className="info-spec-val font-mono" style={{ color: config.esp8266Ip ? 'var(--water-300)' : 'var(--text-muted)' }}>
+                {config.esp8266Ip ? `http://${config.esp8266Ip}` : 'Simulation Internal'}
+              </span>
+            </div>
+            <div className="info-spec-row">
+              <span className="info-spec-key">System Uptime</span>
+              <span className="info-spec-val font-mono">
+                {data ? formatUptime(data.uptime) : '—'}
+              </span>
+            </div>
+            <div className="info-spec-row">
+              <span className="info-spec-key">Connection Status</span>
+              <span className="info-spec-val font-mono" style={{ color: connectionStatus === 'connected' ? 'var(--green-400)' : connectionStatus === 'demo' ? 'var(--water-400)' : 'var(--red-400)' }}>
+                ● {connectionStatus.toUpperCase()}
+              </span>
+            </div>
+            <div className="info-spec-row">
+              <span className="info-spec-key">Last Sync Timestamp</span>
+              <span className="info-spec-val font-mono text-muted">
+                {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Never'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Device Health Transducers */}
         <DeviceHealth data={data} connectionStatus={connectionStatus} />
-        <ActivityLog entries={activityLog} />
       </div>
+
+      {/* Activity Event Log */}
+      <ActivityLog entries={activityLog} />
     </div>
   );
 }
