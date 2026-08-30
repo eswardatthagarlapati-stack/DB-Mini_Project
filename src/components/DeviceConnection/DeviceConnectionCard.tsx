@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Cpu, Wifi, WifiOff, CheckCircle2, AlertCircle, RefreshCw, Radio, Server, Sparkles, HelpCircle } from 'lucide-react';
+import { Wifi, WifiOff, CheckCircle2, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { getEsp8266Ip, setEsp8266Ip, clearEsp8266Ip } from '../../config/deviceConfig';
 import { isValidIPv4, sanitizeIpInput } from '../../utils/validation';
 import type { ConnectionStatus } from '../../types/ecoRain';
@@ -7,8 +7,6 @@ import type { ConnectionStatus } from '../../types/ecoRain';
 interface DeviceConnectionCardProps {
   connectionStatus: ConnectionStatus;
   isLoading: boolean;
-  apiResponseMs: number | null;
-  uptime: number | null;
   onIpChanged: (newIp: string) => void;
   onOpenDemoControls?: () => void;
 }
@@ -16,29 +14,28 @@ interface DeviceConnectionCardProps {
 export function DeviceConnectionCard({
   connectionStatus,
   isLoading,
-  apiResponseMs,
   onIpChanged,
   onOpenDemoControls,
 }: DeviceConnectionCardProps) {
   const currentSavedIp = getEsp8266Ip();
-  const [ipInput, setIpInput] = useState(currentSavedIp);
+  const [ipInput, setIpInput] = useState(currentSavedIp || '');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isEditingIp, setIsEditingIp] = useState(!currentSavedIp);
 
   const isConnected = connectionStatus === 'connected';
-  const isDemo = connectionStatus === 'demo';
 
   const handleConnect = async (targetIp?: string) => {
     const raw = targetIp !== undefined ? targetIp : ipInput;
     const cleanIp = sanitizeIpInput(raw);
 
     if (!cleanIp) {
-      setErrorMsg('Please enter an ESP8266 IP address');
+      setErrorMsg('Please enter the IP address (e.g. 192.168.1.100)');
       return;
     }
 
     if (!isValidIPv4(cleanIp)) {
-      setErrorMsg('Invalid IPv4 address format (e.g. 192.168.1.100)');
+      setErrorMsg('Please enter a valid IP address (e.g. 192.168.1.100)');
       return;
     }
 
@@ -46,6 +43,7 @@ export function DeviceConnectionCard({
     setIsConnecting(true);
     setEsp8266Ip(cleanIp);
     setIpInput(cleanIp);
+    setIsEditingIp(false);
     onIpChanged(cleanIp);
     setIsConnecting(false);
   };
@@ -53,6 +51,7 @@ export function DeviceConnectionCard({
   const handleDisconnect = () => {
     clearEsp8266Ip();
     setIpInput('');
+    setIsEditingIp(true);
     setErrorMsg(null);
     onIpChanged('');
   };
@@ -60,6 +59,7 @@ export function DeviceConnectionCard({
   const handleSwitchToDemo = () => {
     clearEsp8266Ip();
     setIpInput('');
+    setIsEditingIp(false);
     setErrorMsg(null);
     onIpChanged('');
     if (onOpenDemoControls) {
@@ -68,167 +68,111 @@ export function DeviceConnectionCard({
   };
 
   return (
-    <div className="card connection-panel-card" role="region" aria-label="Device Connection Panel">
-      <div className="card-header">
-        <div className="card-title-group">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <h2 className="card-title">CONNECT ESP8266</h2>
-            <span
-              style={{
-                fontSize: '0.7rem',
-                fontFamily: 'var(--font-mono)',
-                fontWeight: 700,
-                padding: '2px 8px',
-                borderRadius: 'var(--radius-xs)',
-                background: isConnected
-                  ? 'rgba(34, 197, 94, 0.15)'
-                  : isDemo
-                  ? 'rgba(56, 189, 248, 0.15)'
-                  : 'rgba(239, 68, 68, 0.15)',
-                color: isConnected
-                  ? 'var(--green-400)'
-                  : isDemo
-                  ? 'var(--water-400)'
-                  : 'var(--red-400)',
-                border: `1px solid ${
-                  isConnected
-                    ? 'rgba(34, 197, 94, 0.35)'
-                    : isDemo
-                    ? 'rgba(56, 189, 248, 0.35)'
-                    : 'rgba(239, 68, 68, 0.35)'
-                }`,
-              }}
-            >
-              ● {isConnected ? 'CONNECTED' : isDemo ? 'DEMO SIMULATION' : 'DISCONNECTED'}
-            </span>
-          </div>
-          <span className="card-subtitle">Local Area Network (LAN) HTTP Telemetry Bus</span>
+    <div className="card" role="region" aria-label="ESP8266 Connection">
+      <div className="connection-box">
+        {/* Left Side: Title & Description */}
+        <div className="connection-info">
+          <h2 className="card-title-main">
+            <Wifi size={20} color="var(--color-brand)" />
+            Connect Your ESP8266
+          </h2>
+          <p className="card-subtitle-main">
+            {isConnected && !isEditingIp
+              ? 'Your device is currently communicating with this control panel.'
+              : 'Enter the IP address shown on your ESP8266 serial monitor or OLED screen.'}
+          </p>
         </div>
-        <div className="card-icon-badge" style={{ color: isConnected ? 'var(--green-400)' : 'var(--water-400)' }}>
-          <Cpu size={18} />
-        </div>
-      </div>
 
-      <div className="conn-panel-grid">
-        {/* Left Column: Form Controls */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <label
-              htmlFor="esp8266-ip-field"
-              style={{
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                color: 'var(--text-secondary)',
-                marginBottom: 6,
-                display: 'block',
-              }}
-            >
-              ESP8266 IP Address
-            </label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
-              <div style={{ position: 'relative', flex: 1 }}>
+        {/* Right Side: Form or Connected Status */}
+        <div className="connection-form">
+          {isConnected && !isEditingIp ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--color-green-bg)',
+                  color: 'var(--color-green)',
+                  fontWeight: 700,
+                  fontSize: '0.9rem',
+                }}
+              >
+                <CheckCircle2 size={16} />
+                <span>ESP8266 Connected</span>
+                <span className="font-mono text-sm" style={{ opacity: 0.9, marginLeft: 4 }}>
+                  (IP: {currentSavedIp})
+                </span>
+              </div>
+
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setIsEditingIp(true)}
+                id="btn-change-ip"
+              >
+                Change IP
+              </button>
+
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={handleDisconnect}
+                id="btn-disconnect"
+                style={{ color: 'var(--color-red)' }}
+              >
+                <WifiOff size={14} /> Disconnect
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <input
-                  id="esp8266-ip-field"
                   type="text"
-                  placeholder="e.g. 192.168.1.100 or 10.254.110.2"
+                  placeholder="e.g. 192.168.1.100"
                   value={ipInput}
                   onChange={(e) => {
                     setIpInput(e.target.value);
                     if (errorMsg) setErrorMsg(null);
                   }}
                   onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
-                  className="ip-input-field"
-                  aria-invalid={!!errorMsg}
-                  aria-describedby={errorMsg ? 'ip-error-msg' : undefined}
+                  className="input-text font-mono"
+                  aria-label="ESP8266 IP Address"
+                  id="input-esp8266-ip"
                 />
+
+                <button
+                  className="btn btn-primary"
+                  onClick={() => handleConnect()}
+                  disabled={isLoading || isConnecting || !ipInput.trim()}
+                  id="btn-connect-ip"
+                >
+                  {isConnecting ? (
+                    <><RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} /> Connecting...</>
+                  ) : (
+                    <>Connect</>
+                  )}
+                </button>
+
+                <button
+                  className="btn btn-outline"
+                  onClick={handleSwitchToDemo}
+                  id="btn-demo-mode"
+                  title="Run offline simulator mode"
+                >
+                  <Sparkles size={15} color="var(--color-brand)" />
+                  <span>Use Demo Mode</span>
+                </button>
               </div>
-              <button
-                className="btn btn-primary"
-                onClick={() => handleConnect()}
-                disabled={isLoading || isConnecting || !ipInput.trim()}
-                id="btn-connect-esp8266"
-                style={{ padding: '0 20px', minWidth: 110 }}
-              >
-                {isConnecting ? (
-                  <><RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> Syncing</>
-                ) : (
-                  <><Wifi size={14} /> CONNECT</>
-                )}
-              </button>
-            </div>
 
-            {errorMsg && (
-              <div id="ip-error-msg" className="ip-error-text" role="alert">
-                <AlertCircle size={13} style={{ flexShrink: 0 }} />
-                <span>{errorMsg}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Quick preset and action buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            {currentSavedIp && (
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={handleDisconnect}
-                id="btn-disconnect-esp8266"
-                style={{ color: 'var(--red-400)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
-              >
-                <WifiOff size={13} /> Disconnect Hardware
-              </button>
-            )}
-
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={handleSwitchToDemo}
-              id="btn-switch-demo"
-              style={{ color: 'var(--water-300)', borderColor: 'rgba(56, 189, 248, 0.3)' }}
-            >
-              <Sparkles size={13} /> Run Demo Simulation
-            </button>
-          </div>
-        </div>
-
-        {/* Right Column: Active Connection State Box */}
-        <div className="conn-status-summary-box">
-          <div className="conn-stat-row">
-            <span className="conn-stat-key"><Radio size={13} /> Hardware Device:</span>
-            <span className="conn-stat-val font-mono">NodeMCU ESP8266 (ESP-12E)</span>
-          </div>
-
-          <div className="conn-stat-row">
-            <span className="conn-stat-key"><Server size={13} /> Target IP:</span>
-            <span className="conn-stat-val font-mono" style={{ color: currentSavedIp ? 'var(--water-300)' : 'var(--text-muted)' }}>
-              {currentSavedIp ? currentSavedIp : 'None (Simulation Active)'}
-            </span>
-          </div>
-
-          <div className="conn-stat-row">
-            <span className="conn-stat-key"><Wifi size={13} /> Status:</span>
-            <span
-              className="conn-stat-val font-mono"
-              style={{
-                color: isConnected ? 'var(--green-400)' : isDemo ? 'var(--water-400)' : 'var(--red-400)',
-                fontWeight: 700,
-              }}
-            >
-              ● {isConnected ? 'Connected to Controller' : isDemo ? 'Demo Mode Active' : 'Disconnected / Standby'}
-            </span>
-          </div>
-
-          {isConnected && apiResponseMs !== null && (
-            <div className="conn-stat-row">
-              <span className="conn-stat-key"><CheckCircle2 size={13} /> Response Latency:</span>
-              <span className="conn-stat-val font-mono text-green">{apiResponseMs} ms round-trip</span>
+              {errorMsg && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-red)', fontSize: '0.82rem', marginTop: 4 }}>
+                  <AlertCircle size={14} />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
             </div>
           )}
-
-          <div className="conn-network-hint">
-            <HelpCircle size={13} style={{ flexShrink: 0 }} />
-            <span>
-              <strong>LAN Notice:</strong> Both ESP8266 and this browser must share the same local Wi-Fi subnet for direct private IP communication.
-            </span>
-          </div>
         </div>
       </div>
     </div>

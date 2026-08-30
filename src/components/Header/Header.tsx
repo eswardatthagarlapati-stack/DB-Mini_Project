@@ -1,13 +1,12 @@
-import { Droplets, Clock, Settings, Wifi, Sparkles, BookOpen, Activity, BarChart2 } from 'lucide-react';
+import { Droplets, Sun, Moon, Monitor, Sparkles, Activity, BarChart2, BookOpen, Settings } from 'lucide-react';
 import type { ConnectionStatus } from '../../types/ecoRain';
-import { ConnectionStatusBadge } from '../ConnectionStatus/ConnectionStatusBadge';
-import { formatTimeSince } from '../../utils/formatters';
+import { useTheme } from '../../hooks/useTheme';
 
 interface HeaderProps {
   connectionStatus: ConnectionStatus;
   ip: string;
-  lastUpdated: Date | null;
-  apiResponseMs: number | null;
+  lastUpdated?: Date | null;
+  apiResponseMs?: number | null;
   activePage: string;
   onNavigate: (page: string) => void;
   onOpenConnectModal?: () => void;
@@ -15,103 +14,143 @@ interface HeaderProps {
 }
 
 const NAV_LINKS = [
-  { id: 'dashboard',   label: 'Dashboard',   icon: Activity },
-  { id: 'analytics',   label: 'Analytics',   icon: BarChart2 },
-  { id: 'hardware',    label: 'Hardware & API', icon: BookOpen },
-  { id: 'settings',    label: 'Settings',    icon: Settings },
+  { id: 'dashboard', label: 'Dashboard', icon: Activity },
+  { id: 'analytics', label: 'Analytics', icon: BarChart2 },
+  { id: 'hardware', label: 'Hardware', icon: BookOpen },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 export function Header({
   connectionStatus,
   ip,
-  lastUpdated,
-  apiResponseMs,
   activePage,
   onNavigate,
-  onOpenConnectModal,
   onOpenDemoModal,
 }: HeaderProps) {
+  const { themeMode, setThemeMode } = useTheme();
+
   return (
     <header className="app-header" role="banner">
       <div className="header-inner">
-        {/* Left: Brand Logo & Exact Subtitle */}
-        <div className="header-brand-group">
-          <a
-            className="brand-logo"
-            href="#dashboard"
-            onClick={(e) => {
-              e.preventDefault();
-              onNavigate('dashboard');
-            }}
-            aria-label="Smart Irrigation Platform"
-          >
-            <div className="brand-icon-gradient">
-              <Droplets size={20} strokeWidth={2.5} />
-            </div>
-            <div className="brand-text-container">
-              <span className="brand-title">SMART IRRIGATION</span>
-              <span className="brand-subtitle">Rainwater Harvesting & Automatic Irrigation</span>
-            </div>
-          </a>
-        </div>
+        {/* Left: Brand Logo & Subtitle */}
+        <a
+          className="header-brand"
+          href="#dashboard"
+          onClick={(e) => {
+            e.preventDefault();
+            onNavigate('dashboard');
+          }}
+          aria-label="Smart Irrigation Dashboard"
+        >
+          <div className="header-brand-icon">
+            <Droplets size={22} strokeWidth={2.2} />
+          </div>
+          <div>
+            <span className="header-brand-title">💧 Smart Irrigation</span>
+            <span className="header-brand-subtitle">Rainwater harvesting & automatic irrigation</span>
+          </div>
+        </a>
 
-        {/* Center: Desktop Navigation Tabs */}
-        <nav className="desktop-nav" role="navigation" aria-label="Main navigation">
+        {/* Center: Desktop Navigation */}
+        <nav className="nav-tabs hide-mobile" role="navigation" aria-label="Main navigation">
           {NAV_LINKS.map((link) => {
             const Icon = link.icon;
+            const isActive = activePage === link.id;
             return (
               <button
                 key={link.id}
-                className={`nav-item${activePage === link.id ? ' active' : ''}`}
+                className={`nav-tab ${isActive ? 'active' : ''}`}
                 onClick={() => onNavigate(link.id)}
-                role="menuitem"
-                aria-current={activePage === link.id ? 'page' : undefined}
+                aria-current={isActive ? 'page' : undefined}
                 id={`nav-${link.id}`}
               >
-                <Icon size={14} />
+                <Icon size={14} style={{ display: 'inline', marginRight: 4, verticalAlign: '-1px' }} />
                 <span>{link.label}</span>
               </button>
             );
           })}
         </nav>
 
-        {/* Right: Actions, Telemetry & ESP8266 Connection Badge */}
-        <div className="header-telemetry">
-          {/* Demo Mode Quick Launcher */}
-          <button
-            className={`header-action-btn ${connectionStatus === 'demo' ? 'demo-active' : ''}`}
-            onClick={onOpenDemoModal}
-            title="Open Demo & Presentation Simulator"
-            aria-label="Demo Simulator"
+        {/* Right: Connection Badge, Theme Switcher & Actions */}
+        <div className="header-right">
+          {/* Connection Status Badge */}
+          <div
+            className={`status-badge ${
+              connectionStatus === 'connected'
+                ? 'connected'
+                : connectionStatus === 'demo'
+                ? 'demo'
+                : connectionStatus === 'connecting'
+                ? 'connecting'
+                : 'disconnected'
+            }`}
+            title={ip ? `ESP8266 IP: ${ip}` : 'No IP Configured'}
           >
-            <Sparkles size={14} />
-            <span className="hide-mobile">Demo Simulator</span>
-          </button>
+            <span
+              className={`status-dot ${
+                connectionStatus === 'connected'
+                  ? 'green'
+                  : connectionStatus === 'demo'
+                  ? 'blue'
+                  : connectionStatus === 'connecting'
+                  ? 'orange'
+                  : 'red'
+              }`}
+            />
+            <span>
+              {connectionStatus === 'connected'
+                ? 'ESP8266 Connected'
+                : connectionStatus === 'demo'
+                ? 'Demo Simulation'
+                : connectionStatus === 'connecting'
+                ? 'Connecting...'
+                : 'ESP8266 Disconnected'}
+            </span>
+          </div>
 
-          {/* Device Connection Button */}
-          <button
-            className="header-action-btn"
-            onClick={onOpenConnectModal}
-            title="Configure ESP8266 IP Connection"
-            aria-label="Connection Settings"
-          >
-            <Wifi size={14} />
-            <span className="hide-mobile">Connect ESP8266</span>
-          </button>
-
-          {/* Telemetry Last Update Clock */}
-          {lastUpdated && (
-            <div className="telemetry-meta hide-mobile" title="Last successful data refresh">
-              <Clock size={12} className="pulse-icon" />
-              <span>{formatTimeSince(lastUpdated)}</span>
-              {connectionStatus === 'connected' && apiResponseMs !== null && (
-                <span>· {apiResponseMs}ms</span>
-              )}
-            </div>
+          {/* Quick Demo Simulator button */}
+          {onOpenDemoModal && (
+            <button
+              className="btn btn-outline btn-sm hide-mobile"
+              onClick={onOpenDemoModal}
+              title="Open Simulator Controls"
+              aria-label="Open Demo Simulator"
+            >
+              <Sparkles size={14} />
+              <span>Demo</span>
+            </button>
           )}
 
-          {/* Primary Connection Status Badge */}
-          <ConnectionStatusBadge status={connectionStatus} ip={ip} />
+          {/* Theme Switcher: Light / Dark / System */}
+          <div className="theme-switcher" role="radiogroup" aria-label="Select Theme">
+            <button
+              type="button"
+              className={`theme-btn ${themeMode === 'light' ? 'active' : ''}`}
+              onClick={() => setThemeMode('light')}
+              title="Light Theme"
+              aria-label="Light Theme"
+            >
+              <Sun size={15} />
+            </button>
+            <button
+              type="button"
+              className={`theme-btn ${themeMode === 'dark' ? 'active' : ''}`}
+              onClick={() => setThemeMode('dark')}
+              title="Dark Theme"
+              aria-label="Dark Theme"
+            >
+              <Moon size={15} />
+            </button>
+            <button
+              type="button"
+              className={`theme-btn ${themeMode === 'system' ? 'active' : ''}`}
+              onClick={() => setThemeMode('system')}
+              title="System Theme"
+              aria-label="System Theme"
+            >
+              <Monitor size={15} />
+            </button>
+          </div>
         </div>
       </div>
     </header>

@@ -1,6 +1,5 @@
-import { Cylinder, AlertTriangle, CheckCircle2, Droplets, Info } from 'lucide-react';
+import { Droplets, AlertTriangle } from 'lucide-react';
 import { getSystemConfig } from '../../config/deviceConfig';
-import { calculateTankPercentage } from '../../utils/tankCalculation';
 
 interface TankVisualizationProps {
   waterLevel: number | null;
@@ -10,223 +9,131 @@ interface TankVisualizationProps {
 export function TankVisualization({ waterLevel, distance }: TankVisualizationProps) {
   const config = getSystemConfig();
   const sensorError = distance !== null && distance < 0;
+  const isUnavailable = sensorError || (waterLevel === null && distance === null);
 
-  // Use calculated tank metrics based on tank height & sensor offset
-  const tankCalc = distance !== null && !sensorError
-    ? calculateTankPercentage(distance, {
-        tankHeightCm: config.tankHeightCm,
-        sensorOffsetCm: config.sensorOffsetCm,
-        minimumUsableLevelPct: config.minimumUsableLevelPct,
-      })
-    : {
-        percentage: waterLevel !== null ? Math.max(0, Math.min(100, waterLevel)) : 0,
-        waterDepthCm: 0,
-        isError: sensorError,
-        status: sensorError ? ('UNAVAILABLE' as const) : waterLevel !== null && waterLevel >= 70 ? ('SUFFICIENT' as const) : ('LOW' as const),
-        reason: sensorError ? 'HC-SR04 signal not detected' : 'Storage volume tracking active',
+  const level = isUnavailable ? 0 : Math.max(0, Math.min(100, waterLevel ?? 0));
+
+  const statusInfo = (() => {
+    if (isUnavailable) {
+      return {
+        label: 'Sensor Unavailable',
+        type: 'orange' as const,
+        note: 'The ultrasonic sensor (HC-SR04) signal is not detected. Please verify connections on pins D5/D6.',
       };
-
-  const level = sensorError || (waterLevel === null && distance === null) ? 0 : tankCalc.percentage;
-
-  const statusColor =
-    sensorError || (waterLevel === null && distance === null)
-      ? 'var(--amber-400)'
-      : level >= 70
-      ? '#38bdf8'
-      : level >= 40
-      ? '#0ea5e9'
-      : level > config.minimumUsableLevelPct
-      ? '#fbbf24'
-      : '#f87171';
-
-  const statusBg =
-    sensorError || (waterLevel === null && distance === null)
-      ? 'rgba(245, 158, 11, 0.15)'
-      : level >= 70
-      ? 'rgba(56, 189, 248, 0.15)'
-      : level >= 40
-      ? 'rgba(14, 165, 233, 0.15)'
-      : 'rgba(239, 68, 68, 0.15)';
-
-  const waterGradient =
-    level >= 70
-      ? 'linear-gradient(180deg, rgba(56, 189, 248, 0.95) 0%, rgba(2, 96, 138, 0.98) 100%)'
-      : level >= 40
-      ? 'linear-gradient(180deg, rgba(14, 165, 233, 0.9) 0%, rgba(3, 105, 161, 0.98) 100%)'
-      : level > config.minimumUsableLevelPct
-      ? 'linear-gradient(180deg, rgba(245, 158, 11, 0.85) 0%, rgba(180, 83, 9, 0.98) 100%)'
-      : 'linear-gradient(180deg, rgba(239, 68, 68, 0.85) 0%, rgba(153, 27, 27, 0.98) 100%)';
+    }
+    if (level <= 0) {
+      return {
+        label: 'Empty',
+        type: 'red' as const,
+        note: 'Rainwater is empty. The system will automatically use the main water tank for irrigation.',
+      };
+    }
+    if (level <= config.minimumUsableLevelPct) {
+      return {
+        label: 'Low Water',
+        type: 'orange' as const,
+        note: `Rainwater is low (below ${config.minimumUsableLevelPct}%). The system will switch to the main water tank.`,
+      };
+    }
+    return {
+      label: 'Water Available',
+      type: 'green' as const,
+      note: 'There is plenty of rainwater available for automatic irrigation.',
+    };
+  })();
 
   return (
-    <div
-      className="card tank-viz-card"
-      style={{ borderTop: '3px solid #0284c7' }}
-      role="region"
-      aria-label="Rainwater Storage Tank Visualization"
-    >
-      {/* Header */}
-      <div className="card-header">
-        <div className="card-title-group">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <h2 className="card-title">RAINWATER TANK VISUALIZATION</h2>
-            <span
-              style={{
-                fontSize: '0.7rem',
-                fontFamily: 'var(--font-mono)',
-                fontWeight: 700,
-                padding: '2px 8px',
-                borderRadius: 'var(--radius-xs)',
-                color: statusColor,
-                background: statusBg,
-                border: `1px solid ${statusColor}40`,
-              }}
-            >
-              STATUS: {tankCalc.status}
-            </span>
-          </div>
-          <span className="card-subtitle">
-            HC-SR04 Ultrasonic Telemetry · Pins TRIG=D5, ECHO=D6 · Geometric Fill Computation
-          </span>
-        </div>
-        <div className="card-icon-badge" style={{ color: 'var(--water-400)' }}>
-          <Cylinder size={18} />
+    <div className="card" role="region" aria-label="Rainwater Tank">
+      <div className="card-header" style={{ marginBottom: 16 }}>
+        <h2 className="card-title-main">
+          <Droplets size={20} color="var(--color-blue)" />
+          Rainwater Tank
+        </h2>
+        <div className={`status-badge ${statusInfo.type === 'green' ? 'connected' : statusInfo.type === 'orange' ? 'connecting' : 'disconnected'}`}>
+          <span className={`status-dot ${statusInfo.type === 'green' ? 'green' : statusInfo.type === 'orange' ? 'orange' : 'red'}`} />
+          <span>{statusInfo.label}</span>
         </div>
       </div>
 
-      {/* Main visualization grid */}
-      <div className="tank-visual-layout">
-        {/* Cylindrical Technical Tank Graphic */}
-        <div
-          className="tank-vessel-wrap"
-          role="img"
-          aria-label={`Rainwater Tank Level: ${sensorError ? 'Unavailable' : `${level}%`}`}
-        >
-          {sensorError ? (
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                padding: 14,
-                textAlign: 'center',
-              }}
-            >
-              <AlertTriangle size={28} color="var(--amber-400)" />
-              <span style={{ fontSize: '0.82rem', color: 'var(--amber-400)', fontWeight: 600, lineHeight: 1.3 }}>
-                Sensor Signal Lost<br />
-                <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.72rem' }}>
-                  HC-SR04 distance timeout (-1 cm)
-                </span>
-              </span>
-            </div>
-          ) : (
-            <>
-              {/* Dynamic Water Body with Liquid Top Wave */}
-              <div
-                className="tank-water-body"
-                style={{
-                  height: `${Math.max(2, level)}%`,
-                  background: waterGradient,
-                  boxShadow: `0 0 20px ${statusColor}40`,
-                }}
-              >
-                {level > 3 && <div className="tank-wave-top" />}
-              </div>
+      <div className="tank-card-inner">
+        {/* Clean Vertical Tank Visual Gauge */}
+        <div className="tank-gauge-container" aria-label={`Water level ${isUnavailable ? 'unavailable' : `${level}%`}`}>
+          <div
+            className="tank-gauge-fill"
+            style={{
+              height: `${level}%`,
+              backgroundColor:
+                statusInfo.type === 'red'
+                  ? 'var(--color-red)'
+                  : statusInfo.type === 'orange'
+                  ? 'var(--color-orange)'
+                  : 'var(--color-blue)',
+            }}
+          />
 
-              {/* Technical Calibration Level Markers */}
-              {[75, 50, 25].map((mark) => (
-                <div key={mark} className="tank-marker" style={{ top: `${100 - mark}%` }}>
-                  <span className="tank-marker-text">{mark}%</span>
-                </div>
-              ))}
+          <div className="tank-gauge-markers">
+            <span className="tank-gauge-mark">100%</span>
+            <span className="tank-gauge-mark">75%</span>
+            <span className="tank-gauge-mark">50%</span>
+            <span className="tank-gauge-mark">25%</span>
+            <span className="tank-gauge-mark">0%</span>
+          </div>
 
-              {/* Central Large Level Readout */}
-              <div className="tank-center-badge">
-                <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff' }}>
-                  {distance !== null || waterLevel !== null ? `${level}%` : '—'}
-                </span>
-                <span style={{ fontSize: '0.62rem', letterSpacing: '0.08em', color: 'var(--water-100)', textTransform: 'uppercase' }}>
-                  RAINWATER LEVEL
-                </span>
-              </div>
-            </>
-          )}
+          <div className="tank-gauge-center-val">
+            {isUnavailable ? '--' : `${Math.round(level)}%`}
+          </div>
         </div>
 
-        {/* Technical Companion Telemetry Column */}
-        <div className="tank-details-col">
-          <div className="tank-metric-row">
-            <span className="text-sm text-secondary">Reservoir Storage Status</span>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '3px 10px',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                fontFamily: 'var(--font-mono)',
-                color: statusColor,
-                background: statusBg,
-                border: `1px solid ${statusColor}40`,
-              }}
-            >
-              {tankCalc.status === 'SUFFICIENT' ? (
-                <CheckCircle2 size={12} />
-              ) : tankCalc.status === 'UNAVAILABLE' ? (
-                <AlertTriangle size={12} />
-              ) : (
-                <Droplets size={12} />
-              )}
-              {tankCalc.status}
+        {/* Companion Information Table */}
+        <div className="tank-details-grid">
+          <div className="tank-stat-row">
+            <span className="tank-stat-label">Water Level</span>
+            <span className="tank-stat-val">
+              {isUnavailable ? '--' : `${level.toFixed(0)}%`}
             </span>
           </div>
 
-          <div className="tank-metric-row">
-            <span className="text-sm text-secondary">Ultrasonic Sensor Distance</span>
-            <span className="font-mono text-sm" style={{ fontWeight: 700, color: sensorError ? 'var(--amber-400)' : 'var(--text-primary)' }}>
-              {sensorError ? 'Sensor Error (-1 cm)' : distance !== null ? `${distance.toFixed(1)} cm` : '—'}
+          <div className="tank-stat-row">
+            <span className="tank-stat-label">Sensor Distance</span>
+            <span className="tank-stat-val">
+              {sensorError ? 'Error (-1 cm)' : distance !== null ? `${distance.toFixed(1)} cm` : '--'}
             </span>
           </div>
 
-          <div className="tank-metric-row">
-            <span className="text-sm text-secondary">Tank Geometry (Configured)</span>
-            <span className="font-mono text-xs text-muted">
-              Height: {config.tankHeightCm} cm · Offset: {config.sensorOffsetCm} cm
+          <div className="tank-stat-row">
+            <span className="tank-stat-label">Backup Switch Threshold</span>
+            <span className="tank-stat-val text-sm">
+              Below {config.minimumUsableLevelPct}%
             </span>
           </div>
 
-          <div className="tank-metric-row">
-            <span className="text-sm text-secondary">Low-Level Switchover Threshold</span>
-            <span className="font-mono text-sm text-amber" style={{ fontWeight: 600 }}>
-              ≤ {config.minimumUsableLevelPct}% (Triggers Pump 2 Backup)
-            </span>
-          </div>
-
-          {/* Operational Advisory Callout */}
+          {/* Clean Explanatory Note */}
           <div
-            className="tank-callout"
             style={{
-              borderColor: `${statusColor}40`,
-              background: `${statusColor}0c`,
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--bg-surface)',
+              borderLeft: `4px solid ${
+                statusInfo.type === 'green'
+                  ? 'var(--color-green)'
+                  : statusInfo.type === 'orange'
+                  ? 'var(--color-orange)'
+                  : 'var(--color-red)'
+              }`,
+              fontSize: '0.85rem',
+              color: 'var(--text-secondary)',
+              lineHeight: 1.4,
+              marginTop: 4,
             }}
           >
-            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: statusColor, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Info size={14} />
-              {tankCalc.reason}
-            </div>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.45 }}>
-              {sensorError
-                ? 'Check HC-SR04 connections on pins TRIG=D5 and ECHO=D6. The firmware returns -1 when no ultrasonic echo is detected within 30ms.'
-                : level > config.minimumUsableLevelPct
-                ? 'Rainwater capacity is sufficient. Automatic irrigation will preferentially engage Pump 1 (Rainwater).'
-                : 'Rainwater capacity is depleted. When soil requires irrigation, controller will automatically divert to Pump 2 (Backup water tank).'}
-            </p>
+            {sensorError ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-orange)' }}>
+                <AlertTriangle size={15} />
+                <span>{statusInfo.note}</span>
+              </div>
+            ) : (
+              <span>{statusInfo.note}</span>
+            )}
           </div>
         </div>
       </div>
